@@ -242,7 +242,7 @@ function sessionFor(req) {
 }
 function currentUser(session) { return users.find(user => user.id === session.userId && user.active); }
 function csrfOkay(req, session) { return req.headers['x-csrf-token'] === session.csrf; }
-function cleanUser(user) { return user ? { id: user.id, name: user.name, username: user.username, email: user.email || '', avatar: user.avatar ? `${user.avatar}?v=${encodeURIComponent(user.avatarUpdatedAt || '1')}` : '', role: user.role, active: user.active, createdAt: user.createdAt } : null; }
+function cleanUser(user) { return user ? { id: user.id, name: user.name, username: user.username, email: user.email || '', avatar: user.avatar ? `${user.avatar.replace(/^\/avatars\//, '/api/avatars/')}?v=${encodeURIComponent(user.avatarUpdatedAt || '1')}` : '', role: user.role, active: user.active, createdAt: user.createdAt } : null; }
 function linkRateFor(user) { return Number.isInteger(user?.linkValueCents) && user.linkValueCents >= 0 ? user.linkValueCents : 5000; }
 function linkValueFor(link) { return Number.isInteger(link.valueCents) && link.valueCents >= 0 ? link.valueCents : 5000; }
 function balanceFor(userId) { return links.filter(link => link.userId === userId && link.status === 'approved').reduce((total, link) => total + linkValueFor(link), 0); }

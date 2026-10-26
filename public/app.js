@@ -156,7 +156,7 @@ function memberRows(list) {
 }
 function avatarMarkup(profile, className = 'avatar') {
   const fallback = `<span class="avatar-fallback">${initials(profile?.name)}</span>`;
-  return `<span class="${className} ${profile?.avatar ? 'has-photo' : ''}" aria-label="Foto de ${escapeHtml(profile?.name || 'perfil')}">${profile?.avatar ? `<img src="${escapeHtml(profile.avatar)}" alt="">${fallback}` : fallback}</span>`;
+  return `<span class="${className} ${profile?.avatar ? 'has-photo' : ''}" aria-label="Foto de ${escapeHtml(profile?.name || 'perfil')}">${profile?.avatar ? `<img src="${escapeHtml(profile.avatar)}" alt="" onerror="this.parentElement.classList.remove('has-photo');this.remove()">${fallback}` : fallback}</span>`;
 }
 function money(cents) { return (Number(cents || 0) / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
 function linkStatus(link) {
