@@ -211,7 +211,7 @@ function fingerprintUrl(parsed) {
 }
 
 const mime = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon' };
-const publicFiles = new Set(['/index.html', '/styles.css', '/app.js', '/logo-digital.png', '/logo-mark.png']);
+const publicFiles = new Set(['/index.html', '/styles.css', '/app.js', '/logo-digital.png', '/logo-mark.png', '/favicon-equipe-digital.png']);
 const json = (res, status, data, extra = {}) => {
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', ...extra });
   res.end(JSON.stringify(data));
