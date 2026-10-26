@@ -5,7 +5,10 @@ const crypto = require('node:crypto');
 const { Pool } = require('pg');
 
 const ROOT = __dirname;
-const DATA_DIR = path.join(ROOT, 'data');
+// Vercel's deployment directory is read-only. The JSON fallback is only for
+// local development; keep its temporary files outside the deployment bundle.
+const DATA_DIR = process.env.VERCEL ? path.join(require('node:os').tmpdir(), 'equipe-digital') : path.join(ROOT, 'data');
+fs.mkdirSync(DATA_DIR, { recursive: true });
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
 const LINKS_FILE = path.join(DATA_DIR, 'links.json');
 const NOTIFICATIONS_FILE = path.join(DATA_DIR, 'notifications.json');
@@ -28,7 +31,7 @@ function loadEnv() {
 }
 loadEnv();
 
-const DATABASE_URL = process.env.DATABASE_URL || '';
+const DATABASE_URL = process.env.DATABASE_URL || process.env.POSTGRES_URL || process.env.POSTGRES_PRISMA_URL || process.env.SUPABASE_DB_URL || '';
 const postgresUrl = DATABASE_URL ? new URL(DATABASE_URL) : null;
 postgresUrl?.searchParams.delete('sslmode');
 const databasePool = DATABASE_URL ? new Pool({ connectionString: postgresUrl.toString(), max: 1, connectionTimeoutMillis: 8000, idleTimeoutMillis: 10000, ssl: { rejectUnauthorized: false } }) : null;
@@ -537,7 +540,10 @@ async function handleAvatar(req, res, pathname) {
 
 async function handleRequest(req, res) {
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
-  if (url.pathname.startsWith('/api/')) return databasePool ? withDatabaseState(req, res, url) : handleApi(req, res, url).catch(error => { console.error(error); json(res, 500, { error: 'Erro interno. Tente novamente.' }); });
+  if (url.pathname.startsWith('/api/')) {
+    if (process.env.VERCEL && !databasePool) return json(res, 503, { error: 'Banco de dados não configurado. Defina DATABASE_URL nas variáveis da Vercel.' });
+    return databasePool ? withDatabaseState(req, res, url) : handleApi(req, res, url).catch(error => { console.error(error); json(res, 500, { error: 'Erro interno. Tente novamente.' }); });
+  }
   let pathname = decodeURIComponent(url.pathname);
   if (pathname === '/') pathname = '/index.html';
   const avatarMatch = pathname.match(/^\/avatars\/([0-9a-f-]{36})\.(png|jpg|webp)$/);
