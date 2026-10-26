@@ -5,6 +5,7 @@ const crypto = require('node:crypto');
 const { Pool } = require('pg');
 
 const ROOT = __dirname;
+const PUBLIC_DIR = path.join(ROOT, 'public');
 // Vercel's deployment directory is read-only. The JSON fallback is only for
 // local development; keep its temporary files outside the deployment bundle.
 const DATA_DIR = process.env.VERCEL ? path.join(require('node:os').tmpdir(), 'equipe-digital') : path.join(ROOT, 'data');
@@ -561,8 +562,8 @@ async function handleRequest(req, res) {
   const avatarMatch = pathname.match(/^\/avatars\/([0-9a-f-]{36})\.(png|jpg|webp)$/);
   if (avatarMatch) return databasePool ? withDatabaseState(req, res, url, () => handleAvatar(req, res, pathname)) : handleAvatar(req, res, pathname);
   if (!publicFiles.has(pathname)) return json(res, 404, { error: 'Não encontrado.' });
-  const file = path.resolve(ROOT, `.${pathname}`);
-  if (!file.startsWith(ROOT + path.sep) || file.includes(`${path.sep}data${path.sep}`) || file.endsWith('.env')) return json(res, 404, { error: 'Não encontrado.' });
+  const file = path.resolve(PUBLIC_DIR, `.${pathname}`);
+  if (!file.startsWith(PUBLIC_DIR + path.sep)) return json(res, 404, { error: 'Não encontrado.' });
   fs.readFile(file, (error, content) => {
     if (error) return json(res, 404, { error: 'Não encontrado.' });
     const ext = path.extname(file);
