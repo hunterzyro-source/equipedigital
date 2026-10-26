@@ -258,7 +258,13 @@ function adminApprovedLinkCount(admin) {
   }
   return admin.approvedLinksTotal;
 }
-function adminPersonalBalance(admin) { return adminApprovedLinkCount(admin) * adminLinkRateFor(admin); }
+function adminPersonalBalance(admin) {
+  if (!Number.isInteger(admin.personalBalanceCents) || admin.personalBalanceCents < 0) {
+    admin.personalBalanceCents = adminApprovedLinkCount(admin) * adminLinkRateFor(admin);
+    saveUsers(users);
+  }
+  return admin.personalBalanceCents;
+}
 function cleanLink(link) {
   return { id: link.id, publicId: link.publicId, userId: link.userId, userName: link.userName, username: link.username, label: link.label, url: link.url, status: link.status, valueCents: link.status === 'approved' ? linkValueFor(link) : 0, createdAt: link.createdAt, decidedAt: link.decidedAt || null, decidedBy: link.decidedBy || null, reason: link.reason || '' };
 }
@@ -314,7 +320,7 @@ async function handleApi(req, res, url) {
     const approvedCount = userLinks.filter(link => link.status === 'approved').length;
     const balanceCents = user.role === 'admin' ? teamBalance() : balanceFor(user.id);
     const personalApprovedCount = user.role === 'admin' ? adminApprovedLinkCount(user) : 0;
-    const personalBalanceCents = personalApprovedCount * adminLinkRateFor(user);
+    const personalBalanceCents = user.role === 'admin' ? adminPersonalBalance(user) : 0;
     const pendingCount = user.role === 'admin' ? links.filter(link => link.status === 'pending').length : userLinks.filter(link => link.status === 'pending').length;
     return json(res, 200, { user: cleanUser(user), stats: [{ label: 'Pessoas na equipe', value: String(active).padStart(2, '0'), detail: 'contas ativas', icon: 'people' }, { label: user.role === 'admin' ? 'Links pendentes' : 'Seus links', value: String(user.role === 'admin' ? pendingCount : userLinks.length).padStart(2, '0'), detail: user.role === 'admin' ? 'aguardando análise' : 'sem limite de envio', icon: 'shield' }, { label: user.role === 'admin' ? 'Saldo aprovado da equipe' : 'Saldo ilustrativo', value: (balanceCents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }), detail: user.role === 'admin' ? 'disponível para pagamentos' : `${approvedCount} links aprovados`, icon: 'spark' }, ...(user.role === 'admin' ? [{ label: 'Meu saldo pessoal', value: (personalBalanceCents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }), detail: `${personalApprovedCount} links da equipe · ${moneyLabel(adminLinkRateFor(user))} por link`, icon: 'spark' }] : [])], members: recent, admin: user.role === 'admin', balanceCents, personalBalanceCents, personalApprovedCount, adminLinkValueCents: user.role === 'admin' ? adminLinkRateFor(user) : null, approvedCount, pendingCount, impersonating: found.session.adminMode });
   }
@@ -401,9 +407,10 @@ async function handleApi(req, res, url) {
     const rateCents = Number(body.rateCents);
     if (!Number.isInteger(rateCents) || rateCents < 1 || rateCents > 10_000_000) return json(res, 400, { error: 'O valor por link deve estar entre R$ 0,01 e R$ 100.000,00.' });
     const approvedCount = adminApprovedLinkCount(user);
+    const balanceCents = adminPersonalBalance(user);
     user.adminLinkValueCents = rateCents;
     saveUsers(users);
-    return json(res, 200, { rateCents, approvedCount, balanceCents: approvedCount * rateCents });
+    return json(res, 200, { rateCents, approvedCount, balanceCents });
   }
   const linkDecisionId = url.pathname.match(/^\/api\/links\/([^/]+)\/decision$/)?.[1];
   if (linkDecisionId && req.method === 'POST') {
@@ -416,11 +423,12 @@ async function handleApi(req, res, url) {
     if (!['approved', 'rejected'].includes(body.status)) return json(res, 400, { error: 'Escolha aprovar ou desaprovar o link.' });
     const admin = body.status === 'approved' ? users.find(item => item.role === 'admin') : null;
     const adminApprovedCountBefore = admin ? adminApprovedLinkCount(admin) : 0;
+    const adminPersonalBalanceBefore = admin ? adminPersonalBalance(admin) : 0;
     link.status = body.status;
     link.decidedAt = new Date().toISOString();
     link.decidedBy = user.id;
     link.reason = body.status === 'rejected' ? String(body.reason || '').trim().slice(0, 240) : '';
-    if(body.status==='approved'){const owner=users.find(item=>item.id===link.userId);link.valueCents=linkRateFor(owner);if(owner){owner.approvedLinks=(owner.approvedLinks||0)+1}if(admin){admin.approvedLinksTotal=adminApprovedCountBefore+1;saveUsers(users)}}
+    if(body.status==='approved'){const owner=users.find(item=>item.id===link.userId);link.valueCents=linkRateFor(owner);if(owner){owner.approvedLinks=(owner.approvedLinks||0)+1}if(admin){admin.approvedLinksTotal=adminApprovedCountBefore+1;admin.personalBalanceCents=adminPersonalBalanceBefore+adminLinkRateFor(admin);saveUsers(users)}}
     const activity = linkActivity.find(item=>item.id===link.id); if(activity){activity.status=link.status;saveList(ACTIVITY_FILE,linkActivity)}
     saveLinks(links);
     addNotification(link.userId, body.status === 'approved' ? 'link-approved' : 'link-rejected', body.status === 'approved' ? 'Link aprovado' : 'Link desaprovado', `${link.publicId} foi ${body.status === 'approved' ? `aprovado · ${moneyLabel(link.valueCents)}` : 'desaprovado'}${link.reason ? `: ${link.reason}` : '.'}`, { linkId: link.id });
