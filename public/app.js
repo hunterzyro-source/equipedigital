@@ -466,15 +466,31 @@ async function savePasswordSettings(event) {
   } catch (err) { error.textContent = err.message; error.classList.add('show'); }
   finally { button.disabled = false; }
 }
+async function prepareAvatarData(file) {
+  const image = new Image();
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    await new Promise((resolve, reject) => { image.onload = resolve; image.onerror = () => reject(new Error('Não foi possível abrir esta imagem.')); image.src = objectUrl; });
+  } finally { URL.revokeObjectURL(objectUrl); }
+  if (!image.naturalWidth || !image.naturalHeight) throw new Error('A imagem está vazia ou danificada.');
+  const scale = Math.min(1, 640 / Math.max(image.naturalWidth, image.naturalHeight));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+  canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error('Não foi possível preparar esta imagem.');
+  context.drawImage(image, 0, 0, canvas.width, canvas.height);
+  const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.86));
+  if (!blob) throw new Error('Não foi possível converter esta imagem.');
+  return await new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = () => reject(new Error('Não foi possível preparar esta imagem para envio.')); reader.readAsDataURL(blob); });
+}
 async function uploadAvatar(event) {
   const file = event.currentTarget.files?.[0];
   event.currentTarget.value = '';
   if (!file) return;
   if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) return notify('Escolha uma foto PNG, JPG ou WebP.');
   if (file.size > 3 * 1024 * 1024) return notify('A foto precisa ter até 3 MB.');
-  const data = await new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = () => reject(new Error('Não foi possível abrir esta foto.')); reader.readAsDataURL(file); }).catch(error => { notify(error.message); return null; });
-  if (!data) return;
-  try { await api('/api/profile/avatar', { method: 'POST', body: JSON.stringify({ data }) }); notify('Foto de perfil atualizada.'); await refreshDashboardPreservingScroll(); }
+  try { const data = await prepareAvatarData(file); await api('/api/profile/avatar', { method: 'POST', body: JSON.stringify({ data }) }); notify('Foto de perfil atualizada.'); await refreshDashboardPreservingScroll(); }
   catch (error) { notify(error.message); }
 }
 async function removeAvatar() {

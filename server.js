@@ -242,7 +242,7 @@ function sessionFor(req) {
 }
 function currentUser(session) { return users.find(user => user.id === session.userId && user.active); }
 function csrfOkay(req, session) { return req.headers['x-csrf-token'] === session.csrf; }
-function cleanUser(user) { return user ? { id: user.id, name: user.name, username: user.username, email: user.email || '', avatar: user.avatar ? `${user.avatar.replace(/^\/avatars\//, '/api/avatars/')}?v=${encodeURIComponent(user.avatarUpdatedAt || '1')}` : '', role: user.role, active: user.active, createdAt: user.createdAt } : null; }
+function cleanUser(user) { return user ? { id: user.id, name: user.name, username: user.username, email: user.email || '', avatar: user.avatar ? `/api/profile/avatar${user.avatar.replace(/^\/avatars\//, '/')}?v=${encodeURIComponent(user.avatarUpdatedAt || '1')}` : '', role: user.role, active: user.active, createdAt: user.createdAt } : null; }
 function linkRateFor(user) { return Number.isInteger(user?.linkValueCents) && user.linkValueCents >= 0 ? user.linkValueCents : 5000; }
 function linkValueFor(link) { return Number.isInteger(link.valueCents) && link.valueCents >= 0 ? link.valueCents : 5000; }
 function balanceFor(userId) { return links.filter(link => link.userId === userId && link.status === 'approved').reduce((total, link) => total + linkValueFor(link), 0); }
@@ -495,6 +495,8 @@ async function handleApi(req, res, url) {
     }
     return json(res, 200, { ok: true });
   }
+  const avatarReadMatch = url.pathname.match(/^\/api\/profile\/avatar\/([0-9a-f-]{36})\.(png|jpg|webp)$/);
+  if (avatarReadMatch && req.method === 'GET') return handleAvatar(req, res, `/avatars/${avatarReadMatch[1]}.${avatarReadMatch[2]}`);
   if (url.pathname === '/api/profile/avatar' && req.method === 'POST') {
     let body;
     try { body = await readBody(req, 4_500_000); } catch (error) { return json(res, 413, { error: 'A foto precisa ter até 3 MB.' }); }
