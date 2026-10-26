@@ -243,9 +243,12 @@ function sessionFor(req) {
 function currentUser(session) { return users.find(user => user.id === session.userId && user.active); }
 function csrfOkay(req, session) { return req.headers['x-csrf-token'] === session.csrf; }
 function cleanUser(user) { return user ? { id: user.id, name: user.name, username: user.username, email: user.email || '', avatar: user.avatar || '', role: user.role, active: user.active, createdAt: user.createdAt } : null; }
-function balanceFor(userId) { return links.filter(link => link.userId === userId && link.status === 'approved').length * 5000; }
+function linkRateFor(user) { return Number.isInteger(user?.linkValueCents) && user.linkValueCents >= 0 ? user.linkValueCents : 5000; }
+function linkValueFor(link) { return Number.isInteger(link.valueCents) && link.valueCents >= 0 ? link.valueCents : 5000; }
+function balanceFor(userId) { return links.filter(link => link.userId === userId && link.status === 'approved').reduce((total, link) => total + linkValueFor(link), 0); }
+function teamBalance() { return links.filter(link => link.status === 'approved').reduce((total, link) => total + linkValueFor(link), 0); }
 function cleanLink(link) {
-  return { id: link.id, publicId: link.publicId, userId: link.userId, userName: link.userName, username: link.username, label: link.label, url: link.url, status: link.status, valueCents: link.status === 'approved' ? 5000 : 0, createdAt: link.createdAt, decidedAt: link.decidedAt || null, decidedBy: link.decidedBy || null, reason: link.reason || '' };
+  return { id: link.id, publicId: link.publicId, userId: link.userId, userName: link.userName, username: link.username, label: link.label, url: link.url, status: link.status, valueCents: link.status === 'approved' ? linkValueFor(link) : 0, createdAt: link.createdAt, decidedAt: link.decidedAt || null, decidedBy: link.decidedBy || null, reason: link.reason || '' };
 }
 function createSession(user, remember, previous = null) {
   const sid = crypto.randomBytes(32).toString('hex');
@@ -297,7 +300,7 @@ async function handleApi(req, res, url) {
     const recent = [...users].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 4).map(cleanUser);
     const userLinks = links.filter(link => link.userId === user.id);
     const approvedCount = userLinks.filter(link => link.status === 'approved').length;
-    const balanceCents = user.role === 'admin' ? links.filter(link => link.status === 'approved').length * 5000 : balanceFor(user.id);
+    const balanceCents = user.role === 'admin' ? teamBalance() : balanceFor(user.id);
     const pendingCount = user.role === 'admin' ? links.filter(link => link.status === 'pending').length : userLinks.filter(link => link.status === 'pending').length;
     return json(res, 200, { user: cleanUser(user), stats: [{ label: 'Pessoas na equipe', value: String(active).padStart(2, '0'), detail: 'contas ativas', icon: 'people' }, { label: user.role === 'admin' ? 'Links pendentes' : 'Seus links', value: String(user.role === 'admin' ? pendingCount : userLinks.length).padStart(2, '0'), detail: user.role === 'admin' ? 'aguardando análise' : 'sem limite de envio', icon: 'shield' }, { label: user.role === 'admin' ? 'Saldo aprovado' : 'Saldo ilustrativo', value: (balanceCents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }), detail: user.role === 'admin' ? 'total da equipe' : `${approvedCount} links aprovados`, icon: 'spark' }], members: recent, admin: user.role === 'admin', balanceCents, approvedCount, pendingCount, impersonating: found.session.adminMode });
   }
@@ -316,7 +319,8 @@ async function handleApi(req, res, url) {
     }
     const visible = links.filter(link => user.role === 'admin' ? (!requestedUserId || requestedUserId === 'all' || link.userId === requestedUserId) : link.userId === user.id)
       .sort((a, b) => Number(a.status !== 'pending') - Number(b.status !== 'pending') || b.createdAt.localeCompare(a.createdAt));
-    return json(res, 200, { links: visible.map(cleanLink), balanceCents: user.role === 'admin' ? (requestedUserId && requestedUserId !== 'all' ? balanceFor(requestedUserId) : links.filter(link => link.status === 'approved').length * 5000) : balanceFor(user.id), pendingCount: visible.filter(link => link.status === 'pending').length });
+    const rateUser = user.role === 'admin' ? users.find(member => member.id === requestedUserId) : user;
+    return json(res, 200, { links: visible.map(cleanLink), balanceCents: user.role === 'admin' ? (requestedUserId && requestedUserId !== 'all' ? balanceFor(requestedUserId) : teamBalance()) : balanceFor(user.id), valuePerLinkCents: rateUser ? linkRateFor(rateUser) : null, pendingCount: visible.filter(link => link.status === 'pending').length });
   }
   if (url.pathname === '/api/links' && req.method === 'POST') {
     expireOldRejections();
@@ -361,7 +365,7 @@ async function handleApi(req, res, url) {
   }
   if (url.pathname === '/api/payouts' && req.method === 'GET') {
     if (user.role !== 'admin') return json(res, 403, { error: 'Apenas o administrador pode consultar pagamentos.' });
-    return json(res, 200, { payouts: payouts.slice(0,100), balances: users.filter(item=>item.role!=='admin').map(member=>({ userId:member.id, name:member.name, username:member.username, avatar:member.avatar, balanceCents:balanceFor(member.id) })) });
+    return json(res, 200, { payouts: payouts.slice(0,100), balances: users.filter(item=>item.role!=='admin').map(member=>({ userId:member.id, name:member.name, username:member.username, avatar:member.avatar, linkValueCents:linkRateFor(member), approvedCount:links.filter(link=>link.userId===member.id&&link.status==='approved').length, balanceCents:balanceFor(member.id) })) });
   }
   if (url.pathname === '/api/payouts' && req.method === 'POST') {
     if (user.role !== 'admin' || found.session.adminMode) return json(res, 403, { error: 'Apenas o administrador pode registrar pagamentos.' });
@@ -370,7 +374,7 @@ async function handleApi(req, res, url) {
     if (!target) return json(res,404,{error:'Conta não encontrada.'});
     const paidLinks = links.filter(item=>item.userId===target.id && item.status==='approved');
     if (!paidLinks.length) return json(res,400,{error:'Esta pessoa não tem saldo aprovado para registrar.'});
-    const record = { id:crypto.randomUUID(), userId:target.id, userName:target.name, username:target.username, linkIds:paidLinks.map(item=>item.publicId), amountCents:paidLinks.length*5000, createdAt:new Date().toISOString(), paidBy:user.id };
+    const record = { id:crypto.randomUUID(), userId:target.id, userName:target.name, username:target.username, linkIds:paidLinks.map(item=>item.publicId), amountCents:paidLinks.reduce((total, item)=>total+linkValueFor(item),0), createdAt:new Date().toISOString(), paidBy:user.id };
     links=links.filter(item=>!paidLinks.includes(item)); saveLinks(links);
     payouts.unshift(record); if(payouts.length>2000)payouts.length=2000; saveList(PAYOUTS_FILE,payouts);
     addNotification(target.id,'payout','Pagamento registrado',`${moneyLabel(record.amountCents)} registrado para ${record.linkIds.length} links aprovados.`,{ payoutId:record.id });
@@ -389,10 +393,10 @@ async function handleApi(req, res, url) {
     link.decidedAt = new Date().toISOString();
     link.decidedBy = user.id;
     link.reason = body.status === 'rejected' ? String(body.reason || '').trim().slice(0, 240) : '';
-    if(body.status==='approved'){const owner=users.find(item=>item.id===link.userId);if(owner){owner.approvedLinks=(owner.approvedLinks||0)+1;saveUsers(users)}}
+    if(body.status==='approved'){const owner=users.find(item=>item.id===link.userId);link.valueCents=linkRateFor(owner);if(owner){owner.approvedLinks=(owner.approvedLinks||0)+1;saveUsers(users)}}
     const activity = linkActivity.find(item=>item.id===link.id); if(activity){activity.status=link.status;saveList(ACTIVITY_FILE,linkActivity)}
     saveLinks(links);
-    addNotification(link.userId, body.status === 'approved' ? 'link-approved' : 'link-rejected', body.status === 'approved' ? 'Link aprovado' : 'Link desaprovado', `${link.publicId} foi ${body.status === 'approved' ? 'aprovado' : 'desaprovado'}${link.reason ? `: ${link.reason}` : '.'}`, { linkId: link.id });
+    addNotification(link.userId, body.status === 'approved' ? 'link-approved' : 'link-rejected', body.status === 'approved' ? 'Link aprovado' : 'Link desaprovado', `${link.publicId} foi ${body.status === 'approved' ? `aprovado · ${moneyLabel(link.valueCents)}` : 'desaprovado'}${link.reason ? `: ${link.reason}` : '.'}`, { linkId: link.id });
     return json(res, 200, { link: cleanLink(link), balanceCents: balanceFor(link.userId) });
   }
   if (url.pathname === '/api/profile' && req.method === 'PATCH') {
@@ -476,7 +480,7 @@ async function handleApi(req, res, url) {
     return json(res, 200, { user: cleanUser(user) });
   }
   if (user.role !== 'admin' || found.session.adminMode) return json(res, 403, { error: 'Apenas o administrador pode gerenciar contas.' });
-  if (url.pathname === '/api/users' && req.method === 'GET') return json(res, 200, { users: users.map(cleanUser) });
+  if (url.pathname === '/api/users' && req.method === 'GET') return json(res, 200, { users: users.map(member => ({ ...cleanUser(member), ...(member.role === 'admin' ? {} : { linkValueCents: linkRateFor(member) }) })) });
   if (url.pathname === '/api/users' && req.method === 'POST') {
     let body;
     try { body = await readBody(req); } catch (error) { return json(res, 400, { error: error.message }); }
@@ -490,7 +494,7 @@ async function handleApi(req, res, url) {
     if (password.length < 8 || password.length > 128) return json(res, 400, { error: 'A senha deve ter pelo menos 8 caracteres.' });
     if (users.some(item => item.username === username)) return json(res, 409, { error: 'Este login já está em uso.' });
     if (users.some(item => (item.email || '').toLowerCase() === email)) return json(res, 409, { error: 'Este e-mail já está cadastrado.' });
-    const created = { id: crypto.randomUUID(), name, username, email, role: 'user', active: true, avatar: '', ...hashPassword(password), createdAt: new Date().toISOString() };
+    const created = { id: crypto.randomUUID(), name, username, email, role: 'user', active: true, avatar: '', linkValueCents: 5000, ...hashPassword(password), createdAt: new Date().toISOString() };
     users.push(created); saveUsers(users);
     return json(res, 201, { user: cleanUser(created) });
   }
@@ -509,6 +513,11 @@ async function handleApi(req, res, url) {
     if (!target) return json(res, 404, { error: 'Conta não encontrada.' });
     if (body.active === false && target.id === user.id) return json(res, 400, { error: 'Não é possível desativar a conta em uso.' });
     if (typeof body.active === 'boolean') target.active = body.active;
+    if (Object.hasOwn(body, 'linkValueCents')) {
+      const linkValueCents = Number(body.linkValueCents);
+      if (!Number.isInteger(linkValueCents) || linkValueCents < 1 || linkValueCents > 10_000_000) return json(res, 400, { error: 'O valor por link deve estar entre R$ 0,01 e R$ 100.000,00.' });
+      target.linkValueCents = linkValueCents;
+    }
     if (body.password) {
       if (String(body.password).length < 8) return json(res, 400, { error: 'A nova senha deve ter pelo menos 8 caracteres.' });
       Object.assign(target, hashPassword(String(body.password)));

@@ -10,6 +10,7 @@ let selectedLinkStatus = 'all';
 let activityUserFilter = 'all';
 let linksBalanceCents = 0;
 let linksPendingCount = 0;
+let valuePerLinkCents = 5000;
 let notifications = [];
 let unreadNotifications = 0;
 let activityData = { days: [] };
@@ -139,7 +140,7 @@ function linkStatus(link) {
 }
 function renderLinkCards(list, isAdmin) {
   if (!list.length) return `<div class="links-empty"><span class="empty-link-icon">${svg('link', 21)}</span><strong>${isAdmin ? 'Nenhum link neste filtro' : 'Seu fluxo começa com um link'}</strong><p>${isAdmin ? 'Escolha outra pessoa ou aguarde novos envios da equipe.' : 'Envie quantos links precisar. Cada um será analisado pela administração.'}</p></div>`;
-  return list.map(link => `<article class="submitted-link" data-link-card="${escapeHtml(link.id)}"><div class="link-card-top"><div class="link-id-wrap"><span class="link-icon">${svg('link', 15)}</span><span><strong>${escapeHtml(link.publicId)}</strong><small>${escapeHtml(link.userName)} · @${escapeHtml(link.username)}</small></span></div>${linkStatus(link)}</div>${link.label ? `<div class="link-label">${escapeHtml(link.label)}</div>` : ''}<a class="link-url" href="${escapeHtml(link.url)}" target="_blank" rel="noopener noreferrer" title="Abrir link">${escapeHtml(link.url)}</a><div class="link-card-bottom"><span class="link-meta">Enviado em ${dateFmt(link.createdAt)}${link.status === 'approved' ? ` · <b class="approved-credit">+ ${money(5000)}</b>` : ''}${link.status === 'rejected' && link.reason ? ` · <span class="reject-reason">${escapeHtml(link.reason)}</span>` : ''}</span><div class="link-actions"><button class="soft-btn small-soft" data-link-copy="${escapeHtml(link.id)}">${svg('copy', 13)} Copiar link</button>${isAdmin && link.status === 'pending' ? `<button class="approve-btn" data-link-decision="approved" data-id="${escapeHtml(link.id)}">${svg('check', 13)} Aprovar</button><button class="reject-btn" data-link-decision="rejected" data-id="${escapeHtml(link.id)}">${svg('x', 13)} Desaprovar</button>` : ''}</div></div></article>`).join('');
+  return list.map(link => `<article class="submitted-link" data-link-card="${escapeHtml(link.id)}"><div class="link-card-top"><div class="link-id-wrap"><span class="link-icon">${svg('link', 15)}</span><span><strong>${escapeHtml(link.publicId)}</strong><small>${escapeHtml(link.userName)} · @${escapeHtml(link.username)}</small></span></div>${linkStatus(link)}</div>${link.label ? `<div class="link-label">${escapeHtml(link.label)}</div>` : ''}<a class="link-url" href="${escapeHtml(link.url)}" target="_blank" rel="noopener noreferrer" title="Abrir link">${escapeHtml(link.url)}</a><div class="link-card-bottom"><span class="link-meta">Enviado em ${dateFmt(link.createdAt)}${link.status === 'approved' ? ` · <b class="approved-credit">+ ${money(link.valueCents)}</b>` : ''}${link.status === 'rejected' && link.reason ? ` · <span class="reject-reason">${escapeHtml(link.reason)}</span>` : ''}</span><div class="link-actions"><button class="soft-btn small-soft" data-link-copy="${escapeHtml(link.id)}">${svg('copy', 13)} Copiar link</button>${isAdmin && link.status === 'pending' ? `<button class="approve-btn" data-link-decision="approved" data-id="${escapeHtml(link.id)}">${svg('check', 13)} Aprovar</button><button class="reject-btn" data-link-decision="rejected" data-id="${escapeHtml(link.id)}">${svg('x', 13)} Desaprovar</button>` : ''}</div></div></article>`).join('');
 }
 function downloadLinksText(list, target) {
   const safeName = (target?.username || target?.name || 'equipe').normalize('NFKD').replace(/[^a-zA-Z0-9._-]+/g, '_').replace(/^_+|_+$/g, '') || 'equipe';
@@ -156,7 +157,7 @@ function downloadLinksText(list, target) {
       `Título: ${link.label || 'Sem título'}`,
       `Link: ${link.url}`,
       `Status: ${{ pending: 'Pendente', approved: 'Aprovado', rejected: 'Desaprovado' }[link.status] || link.status}`,
-      `Saldo ilustrativo: ${link.status === 'approved' ? money(5000) : money(0)}`,
+      `Saldo ilustrativo: ${link.status === 'approved' ? money(link.valueCents) : money(0)}`,
       `Enviado em: ${new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(link.createdAt))}`,
       `Analisado em: ${link.decidedAt ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(link.decidedAt)) : 'Ainda não analisado'}`,
       link.reason ? `Observação: ${link.reason}` : '',
@@ -176,7 +177,7 @@ function linkSection(isAdmin) {
   const filter = isAdmin ? `<select class="search-input user-filter" id="link-user-filter" aria-label="Filtrar links por usuário"><option value="all" ${selectedLinkUser === 'all' ? 'selected' : ''}>Toda a equipe</option>${members.map(member => `<option value="${escapeHtml(member.id)}" ${selectedLinkUser === member.id ? 'selected' : ''}>${escapeHtml(member.name)}${member.active ? '' : ' · inativa'}</option>`).join('')}</select><select class="search-input status-filter" id="link-status-filter" aria-label="Filtrar links por status"><option value="all" ${selectedLinkStatus === 'all' ? 'selected' : ''}>Todos os status</option><option value="pending" ${selectedLinkStatus === 'pending' ? 'selected' : ''}>Pendentes</option><option value="approved" ${selectedLinkStatus === 'approved' ? 'selected' : ''}>Aprovados</option><option value="rejected" ${selectedLinkStatus === 'rejected' ? 'selected' : ''}>Desaprovados</option></select>` : '';
   const targetBalanceLabel = isAdmin && selectedLinkUser === 'all' ? 'Total aprovado na equipe' : 'Saldo ilustrativo';
   const shown = isAdmin && selectedLinkStatus !== 'all' ? linkItems.filter(link => link.status === selectedLinkStatus) : linkItems;
-  return `<section class="links-section" id="links-section"><div class="section-title"><div><h2>${isAdmin ? 'Central de links' : 'Meus links'}</h2><p>${isAdmin ? 'Analise cada envio e acompanhe os créditos ilustrativos.' : 'Envie links ilimitados e acompanhe cada análise.'}</p></div><div class="link-head-actions">${filter}<button class="soft-btn" id="export-links">${svg('download', 14)} Exportar TXT</button></div></div><div class="link-summary"><div class="link-summary-card"><span class="link-summary-icon">${svg('spark', 15)}</span><span><small>${targetBalanceLabel}</small><strong id="links-balance">${money(reviewedBalance)}</strong><em>R$ 50,00 por link aprovado · saldo ilustrativo</em></span></div><div class="link-summary-card pending-summary"><span class="link-summary-icon">${svg('clock', 15)}</span><span><small>${isAdmin ? 'Aguardando sua análise' : 'Aguardando aprovação'}</small><strong id="links-pending">${linksPendingCount}</strong><em>${isAdmin ? 'Links pendentes da seleção atual' : 'Você pode continuar enviando'}</em></span></div></div>${isAdmin?`<article class="panel payout-panel"><div class="panel-head"><div><h3>Registrar pagamento ilustrativo</h3><span>Ao confirmar, o saldo zera e os links aprovados saem da lista ativa.</span></div></div><div class="payout-balances">${payoutData.balances.filter(item=>item.balanceCents>0).map(item=>`<div class="payout-row">${avatarMarkup(item)}<span><strong>${escapeHtml(item.name)}</strong><small>${money(item.balanceCents)} · ${item.balanceCents/5000} links</small></span><button class="soft-btn" data-payout-user="${escapeHtml(item.userId)}">Registrar pagamento</button></div>`).join('')||'<div class="notification-empty">Nenhum saldo aprovado para pagar.</div>'}</div></article><article class="panel payout-history"><div class="panel-head"><h3>Histórico de pagamentos</h3></div>${payoutData.payouts.slice(0,8).map(item=>`<div class="payout-row"><span class="module-icon">${svg('check',14)}</span><span><strong>${escapeHtml(item.userName)}</strong><small>${item.linkIds.length} links · IDs ${item.linkIds.map(escapeHtml).join(', ')}</small></span><b>${money(item.amountCents)}</b><time>${dateFmt(item.createdAt)}</time></div>`).join('')||'<div class="notification-empty">Os pagamentos registrados aparecerão aqui.</div>'}</article>`:''}${!isAdmin ? `<form id="submit-link-form" class="submit-link-form"><div class="submit-link-title"><span class="link-icon">${svg('plus', 15)}</span><span><strong>Adicionar um link</strong><small>Não há limite de envios. Cada link recebe um ID próprio.</small></span></div><div class="link-form-fields"><label class="modal-field"><span>Link</span><input name="url" type="url" placeholder="https://exemplo.com/sua-pagina" required maxlength="2048"></label><label class="modal-field"><span>Nome para identificar <small>(opcional)</small></span><input name="label" type="text" placeholder="Ex.: Campanha de outubro" maxlength="120"></label><button class="primary-btn compact" type="submit" id="submit-link-button">${svg('plus', 14)} Enviar para análise</button></div><div class="login-error" id="link-form-error"></div></form>` : ''}<div class="links-list-head"><strong>${isAdmin ? 'Links enviados' : 'Histórico de envios'}</strong><span id="links-total">${shown.length} ${shown.length === 1 ? 'link' : 'links'}${isAdmin && selectedLinkStatus !== 'all' ? ` de ${linkItems.length}` : ''}</span></div><div id="links-list" class="links-list">${renderLinkCards(shown, isAdmin)}</div></section>`;
+  return `<section class="links-section" id="links-section"><div class="section-title"><div><h2>${isAdmin ? 'Central de links' : 'Meus links'}</h2><p>${isAdmin ? 'Analise cada envio e acompanhe os créditos ilustrativos.' : 'Envie links ilimitados e acompanhe cada análise.'}</p></div><div class="link-head-actions">${filter}<button class="soft-btn" id="export-links">${svg('download', 14)} Exportar TXT</button></div></div><div class="link-summary"><div class="link-summary-card"><span class="link-summary-icon">${svg('spark', 15)}</span><span><small>${targetBalanceLabel}</small><strong id="links-balance">${money(reviewedBalance)}</strong><em id="link-value-label">${valuePerLinkCents === null ? 'Valor definido individualmente por perfil' : money(valuePerLinkCents) + ' por link aprovado'} · saldo ilustrativo</em></span></div><div class="link-summary-card pending-summary"><span class="link-summary-icon">${svg('clock', 15)}</span><span><small>${isAdmin ? 'Aguardando sua análise' : 'Aguardando aprovação'}</small><strong id="links-pending">${linksPendingCount}</strong><em>${isAdmin ? 'Links pendentes da seleção atual' : 'Você pode continuar enviando'}</em></span></div></div>${isAdmin?`<article class="panel payout-panel"><div class="panel-head"><div><h3>Registrar pagamento ilustrativo</h3><span>Ao confirmar, o saldo zera e os links aprovados saem da lista ativa.</span></div></div><div class="payout-balances">${payoutData.balances.filter(item=>item.balanceCents>0).map(item=>`<div class="payout-row">${avatarMarkup(item)}<span><strong>${escapeHtml(item.name)}</strong><small>${money(item.balanceCents)} · ${item.approvedCount} links · ${money(item.linkValueCents)} por link</small></span><button class="soft-btn" data-payout-user="${escapeHtml(item.userId)}">Registrar pagamento</button></div>`).join('')||'<div class="notification-empty">Nenhum saldo aprovado para pagar.</div>'}</div></article><article class="panel payout-history"><div class="panel-head"><h3>Histórico de pagamentos</h3></div>${payoutData.payouts.slice(0,8).map(item=>`<div class="payout-row"><span class="module-icon">${svg('check',14)}</span><span><strong>${escapeHtml(item.userName)}</strong><small>${item.linkIds.length} links · IDs ${item.linkIds.map(escapeHtml).join(', ')}</small></span><b>${money(item.amountCents)}</b><time>${dateFmt(item.createdAt)}</time></div>`).join('')||'<div class="notification-empty">Os pagamentos registrados aparecerão aqui.</div>'}</article>`:''}${!isAdmin ? `<form id="submit-link-form" class="submit-link-form"><div class="submit-link-title"><span class="link-icon">${svg('plus', 15)}</span><span><strong>Adicionar um link</strong><small>Não há limite de envios. Cada link recebe um ID próprio.</small></span></div><div class="link-form-fields"><label class="modal-field"><span>Link</span><input name="url" type="url" placeholder="https://exemplo.com/sua-pagina" required maxlength="2048"></label><label class="modal-field"><span>Nome para identificar <small>(opcional)</small></span><input name="label" type="text" placeholder="Ex.: Campanha de outubro" maxlength="120"></label><button class="primary-btn compact" type="submit" id="submit-link-button">${svg('plus', 14)} Enviar para análise</button></div><div class="login-error" id="link-form-error"></div></form>` : ''}<div class="links-list-head"><strong>${isAdmin ? 'Links enviados' : 'Histórico de envios'}</strong><span id="links-total">${shown.length} ${shown.length === 1 ? 'link' : 'links'}${isAdmin && selectedLinkStatus !== 'all' ? ` de ${linkItems.length}` : ''}</span></div><div id="links-list" class="links-list">${renderLinkCards(shown, isAdmin)}</div></section>`;
 }
 function chartMarkup() {
   const days=activityData?.days||[];const max=Math.max(1,...days.map(day=>day.count));const pts=days.map((day,i)=>({x:days.length<2?300:i*600/(days.length-1),y:132-(day.count/max)*105}));const line=pts.map((p,i)=>`${i?'L':'M'}${p.x},${p.y}`).join(' ');const area=pts.length?`${line} L600 160 L0 160Z`:'';
@@ -200,6 +201,7 @@ async function fetchLinks() {
   linkItems = result.links;
   linksBalanceCents = result.balanceCents;
   linksPendingCount = result.pendingCount;
+  valuePerLinkCents = result.valuePerLinkCents ?? null;
 }
 function updateLinksUi() {
   const list = document.querySelector('#links-list');
@@ -209,6 +211,8 @@ function updateLinksUi() {
   list.innerHTML = renderLinkCards(shown, isAdmin);
   document.querySelector('#links-balance').textContent = money(linksBalanceCents);
   document.querySelector('#links-pending').textContent = String(linksPendingCount);
+  const valueLabel = document.querySelector('#link-value-label');
+  if (valueLabel) valueLabel.textContent = `${valuePerLinkCents === null ? 'Valor definido individualmente por perfil' : `${money(valuePerLinkCents)} por link aprovado`} · saldo ilustrativo`;
   document.querySelector('#links-total').textContent = `${shown.length} ${shown.length === 1 ? 'link' : 'links'}${isAdmin && selectedLinkStatus !== 'all' ? ` de ${linkItems.length}` : ''}`;
   list.querySelectorAll('[data-link-copy]').forEach(button => button.addEventListener('click', async () => {
     const target = linkItems.find(link => link.id === button.dataset.linkCopy);
@@ -242,10 +246,11 @@ async function decideLink(id, status) {
   const target = linkItems.find(link => link.id === id);
   if (!target) return;
   const approved = status === 'approved';
-  if (!confirm(approved ? `Aprovar ${target.publicId}? O saldo ilustrativo de ${money(5000)} será somado para ${target.userName}.` : `Desaprovar ${target.publicId}?`)) return;
+  const ownerRate = payoutData.balances.find(item => item.userId === target.userId)?.linkValueCents ?? 5000;
+  if (!confirm(approved ? `Aprovar ${target.publicId}? O saldo ilustrativo de ${money(ownerRate)} será somado para ${target.userName}.` : `Desaprovar ${target.publicId}?`)) return;
   try {
-    await api(`/api/links/${encodeURIComponent(id)}/decision`, { method: 'POST', body: JSON.stringify({ status }) });
-    notify(approved ? `Link aprovado · ${money(5000)} adicionados ao saldo ilustrativo.` : 'Link desaprovado.');
+    const result = await api(`/api/links/${encodeURIComponent(id)}/decision`, { method: 'POST', body: JSON.stringify({ status }) });
+    notify(approved ? `Link aprovado · ${money(result.link.valueCents)} adicionados ao saldo ilustrativo.` : 'Link desaprovado.');
     await refreshDashboardPreservingScroll();
   } catch (error) { notify(error.message); }
 }
@@ -417,6 +422,27 @@ function createAccountView() {
 function registeredAccountsView() {
   return `<section class="admin-section" id="registered-accounts"><div class="section-title"><div><div class="eyebrow">ADMINISTRAÇÃO DA EQUIPE</div><h2>Contas registradas</h2><p>Consulte o perfil, abra uma conta ou atualize o acesso.</p></div><div class="admin-toolbar"><input class="search-input" id="user-search" type="search" placeholder="Buscar nome, usuário ou e-mail…" aria-label="Buscar contas"></div></div><article class="panel" style="padding:7px 17px"><div class="table-wrap"><table class="user-table"><thead><tr><th>Conta</th><th>Perfil</th><th>Status</th><th>Adicionada</th><th>Ações</th></tr></thead><tbody id="user-rows">${memberRows(members)}</tbody></table></div></article></section>`;
 }
+function linkValuesView() {
+  const team = members.filter(member => member.role !== 'admin');
+  return `<section class="admin-section link-values-page"><div class="section-title"><div><div class="eyebrow">ADMINISTRAÇÃO DA EQUIPE</div><h2>Valores por perfil</h2><p>Defina quanto cada pessoa recebe por link aprovado.</p></div></div><article class="panel link-values-intro"><span class="module-icon">${svg('spark', 16)}</span><div><strong>Valor automático na aprovação</strong><p>O valor definido será aplicado ao aprovar os próximos links. Aprovações anteriores mantêm o valor registrado na época.</p></div></article><div class="link-values-list">${team.map(member => `<article class="panel link-value-card" data-rate-row="${escapeHtml(member.id)}">${avatarMarkup(member, 'avatar link-value-avatar')}<div class="link-value-person"><strong>${escapeHtml(member.name)}</strong><small>@${escapeHtml(member.username)}${member.active ? '' : ' · conta inativa'}</small></div><label class="link-value-field"><span>Valor por link</span><span class="currency-input"><b>R$</b><input type="number" min="0.01" max="100000" step="0.01" value="${((member.linkValueCents ?? 5000) / 100).toFixed(2)}" data-link-value="${escapeHtml(member.id)}" aria-label="Valor por link aprovado para ${escapeHtml(member.name)}"></span></label><button class="primary-btn compact" type="button" data-save-link-value="${escapeHtml(member.id)}">Salvar</button></article>`).join('') || '<article class="panel empty-state">Crie uma conta para definir o valor por link.</article>'}</div></section>`;
+}
+async function saveLinkValue(userId) {
+  const input = document.querySelector(`[data-link-value="${CSS.escape(userId)}"]`);
+  const button = document.querySelector(`[data-save-link-value="${CSS.escape(userId)}"]`);
+  const value = Number(input?.value);
+  const cents = Math.round(value * 100);
+  if (!Number.isFinite(value) || cents < 1 || cents > 10_000_000) return notify('Informe um valor entre R$ 0,01 e R$ 100.000,00.');
+  button.disabled = true;
+  try {
+    await api(`/api/users/${encodeURIComponent(userId)}`, { method: 'PATCH', body: JSON.stringify({ linkValueCents: cents }) });
+    const member = members.find(item => item.id === userId);
+    if (member) member.linkValueCents = cents;
+    const balance = payoutData.balances.find(item => item.userId === userId);
+    if (balance) balance.linkValueCents = cents;
+    notify('Valor por link atualizado.');
+  } catch (error) { notify(error.message); }
+  finally { button.disabled = false; }
+}
 function settingsView() {
   const theme = localStorage.getItem('eq_theme') === 'light' ? 'light' : 'dark';
   const compact = localStorage.getItem('eq_compact_mode') === 'true';
@@ -436,16 +462,17 @@ function renderDashboard() {
   if (!isAdmin && !['overview', 'links', 'settings', 'ranking'].includes(activeView)) activeView = 'overview';
   const welcomeName = escapeHtml(current?.name?.split(' ')[0] || 'equipe');
   const pendingBadge = dashboardData?.pendingCount ? String(dashboardData.pendingCount) : '';
-  const pageTitles = { overview: 'Visão geral', 'create-account': 'Criar conta', accounts: 'Contas registradas', links: isAdmin ? 'Links da equipe' : 'Meus links', ranking: 'Ranking', settings: 'Configurações' };
+  const pageTitles = { overview: 'Visão geral', 'create-account': 'Criar conta', accounts: 'Contas registradas', rates: 'Valores por perfil', links: isAdmin ? 'Links da equipe' : 'Meus links', ranking: 'Ranking', settings: 'Configurações' };
   const page = activeView === 'overview' ? overviewView(isAdmin, welcomeName)
     : activeView === 'create-account' && isAdmin ? createAccountView()
     : activeView === 'accounts' && isAdmin ? registeredAccountsView()
+    : activeView === 'rates' && isAdmin ? linkValuesView()
     : activeView === 'links' ? linkSection(isAdmin)
     : activeView === 'ranking' ? rankingView()
     : activeView === 'settings' ? settingsView()
     : overviewView(isAdmin, welcomeName);
   const navigation = isAdmin
-    ? `${navItem('overview', 'Visão geral', 'grid')}${navItem('create-account', 'Criar conta', 'plus')}${navItem('accounts', 'Contas registradas', 'users', String(members.filter(member => member.role !== 'admin').length))}${navItem('links', 'Links da equipe', 'link', pendingBadge)}${navItem('ranking', 'Ranking', 'chart')}${navItem('settings', 'Configurações', 'settings')}`
+    ? `${navItem('overview', 'Visão geral', 'grid')}${navItem('create-account', 'Criar conta', 'plus')}${navItem('accounts', 'Contas registradas', 'users', String(members.filter(member => member.role !== 'admin').length))}${navItem('rates', 'Valores dos links', 'spark')}${navItem('links', 'Links da equipe', 'link', pendingBadge)}${navItem('ranking', 'Ranking', 'chart')}${navItem('settings', 'Configurações', 'settings')}`
     : `${navItem('overview', 'Visão geral', 'grid')}${navItem('links', 'Meus links', 'link', pendingBadge)}${navItem('ranking', 'Ranking', 'chart')}${navItem('settings', 'Configurações', 'settings')}`;
   app.innerHTML = `<div class="dashboard">${dashboardData?.impersonating ? `<div class="impersonate-banner" style="grid-column:1/-1"><span>Você está visualizando o espaço de <strong>${escapeHtml(current.name)}</strong>.</span><button class="soft-btn" id="return-admin">${svg('arrow', 13)} Voltar à administração</button></div>` : ''}<aside class="sidebar"><div class="sidebar-brand">${brand()}</div><div class="side-label">Espaço de trabalho</div><nav class="nav">${navigation}</nav><div class="sidebar-bottom"><div class="workspace-card"><div class="workspace-card-head"><span class="workspace-icon">${svg('wave', 15)}</span><strong>Equipe em sintonia</strong></div><p>Seu espaço de trabalho, organizado em um só lugar.</p></div><div class="side-profile">${avatarMarkup(current)}<span class="profile-copy"><strong>${escapeHtml(current?.name)}</strong><small>${isAdmin ? 'Administrador' : 'Membro da equipe'}</small></span><button class="icon-btn" title="Sair da conta" id="logout">${svg('logout', 15)}</button></div></div></aside><main class="main"><header class="topbar"><div class="breadcrumb">EQUIPE DIGITAL&nbsp; / &nbsp;<b>${pageTitles[activeView] || 'Visão geral'}</b></div><div class="top-actions"><span class="top-time">${new Intl.DateTimeFormat('pt-BR', { dateStyle: 'full' }).format(new Date())}</span><div class="notification-wrap"><button class="notification-toggle" id="notification-toggle" title="Notificações">${svg('bell', 17)}<span id="notification-count" class="notification-count" ${unreadNotifications?'':'hidden'}>${unreadNotifications>9?'9+':unreadNotifications}</span></button><div class="notification-panel" id="notification-panel">${notificationMarkup()}</div></div></div></header><div class="page">${page}</div></main></div>`;
   document.querySelector('#logout')?.addEventListener('click', logout);
@@ -459,6 +486,7 @@ function renderDashboard() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }));
   document.querySelector('#create-user-form')?.addEventListener('submit', createAccount);
+  document.querySelectorAll('[data-save-link-value]').forEach(button => button.addEventListener('click', () => saveLinkValue(button.dataset.saveLinkValue)));
   document.querySelector('#profile-settings-form')?.addEventListener('submit', saveProfileSettings);
   document.querySelector('#password-settings-form')?.addEventListener('submit', savePasswordSettings);
   document.querySelectorAll('input[name="site-theme"]').forEach(input => input.addEventListener('change', event => {
