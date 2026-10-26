@@ -24,16 +24,17 @@ html[data-theme="light"] body,html[data-theme="light"] .app-shell{background:#f3
 @media(max-width:1100px){.metrics-admin{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:760px){.metrics-admin{grid-template-columns:repeat(2,minmax(0,1fr))}.admin-personal-settings .settings-form{grid-template-columns:1fr}.admin-personal-balance,.admin-personal-settings .settings-form-actions{grid-column:1/-1}}
 
-/* Modal de redefinição compacto, centralizado e sem rolagem interna */
-.password-reset-dialog{box-sizing:border-box;width:min(420px,calc(100vw - 24px));max-width:calc(100vw - 24px);max-height:none;overflow:visible;overscroll-behavior:auto;color:var(--text);padding:21px}
-.password-reset-dialog::backdrop{background:rgba(3,8,10,.78);backdrop-filter:blur(7px)}
-.password-reset-dialog .modal-head{gap:12px;min-width:0;margin-bottom:16px}
-.password-reset-dialog .modal-head>div{min-width:0;overflow-wrap:anywhere}
-.password-reset-dialog .modal-head p{line-height:1.5}
-.password-reset-dialog .modal-field{margin:12px 0}
-.password-reset-dialog .modal-field input{min-width:0}
+/* Modal de senha: caixa compacta posicionada pelo centro da janela */
+dialog.password-reset-dialog[open]{display:block!important;position:fixed!important;inset:auto!important;top:50%!important;left:50%!important;right:auto!important;bottom:auto!important;transform:translate(-50%,-50%)!important;margin:0!important;box-sizing:border-box;width:min(420px,calc(100vw - 24px))!important;height:auto!important;min-height:0!important;max-height:none!important;overflow:visible!important;overscroll-behavior:auto;color:var(--text);padding:21px}
+dialog.password-reset-dialog::backdrop{background:rgba(3,8,10,.78);backdrop-filter:blur(7px)}
+dialog.password-reset-dialog>.modal-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;min-width:0;margin-bottom:16px}
+dialog.password-reset-dialog .modal-head>div{min-width:0;overflow-wrap:anywhere}
+dialog.password-reset-dialog .modal-head p{line-height:1.5}
+dialog.password-reset-dialog>form{display:block;width:100%;margin:0}
+dialog.password-reset-dialog .modal-field{display:grid;width:100%;margin:12px 0}
+dialog.password-reset-dialog .modal-field input{box-sizing:border-box;width:100%;min-width:0}
 .password-modal-help{color:#80908a;font-size:10px;line-height:1.4}
-.password-reset-dialog .modal-actions{flex-wrap:nowrap;margin-top:16px}
-.password-reset-dialog .modal-actions button{min-height:42px}
-@media(max-width:480px){.password-reset-dialog{width:calc(100vw - 24px);padding:18px;border-radius:14px}.password-reset-dialog .modal-head h2{font-size:19px}.password-reset-dialog .modal-actions{display:grid;grid-template-columns:1fr 1fr;gap:9px}.password-reset-dialog .modal-actions button{width:100%;min-width:0;min-height:44px;padding-inline:10px}}
-@media(max-height:420px){.password-reset-dialog{padding:14px}.password-reset-dialog .modal-head{margin-bottom:10px}.password-reset-dialog .modal-field{margin:8px 0}.password-reset-dialog .modal-actions{margin-top:10px}}
+dialog.password-reset-dialog .modal-actions{display:flex;flex-wrap:nowrap;justify-content:flex-end;gap:9px;margin-top:16px}
+dialog.password-reset-dialog .modal-actions button{min-height:42px}
+@media(max-width:480px){dialog.password-reset-dialog[open]{width:calc(100vw - 24px)!important;padding:18px}dialog.password-reset-dialog .modal-head h2{font-size:19px}dialog.password-reset-dialog .modal-actions{display:grid;grid-template-columns:1fr 1fr;gap:9px}dialog.password-reset-dialog .modal-actions button{width:100%;min-width:0;min-height:44px;padding-inline:10px}}
+@media(max-height:420px){dialog.password-reset-dialog[open]{padding:14px}dialog.password-reset-dialog>.modal-head{margin-bottom:10px}dialog.password-reset-dialog .modal-field{margin:8px 0}dialog.password-reset-dialog .modal-actions{margin-top:10px}}
