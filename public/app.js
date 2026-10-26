@@ -55,9 +55,34 @@ function notify(message) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => toast.classList.remove('show'), 2800);
 }
-function playNotificationSound() {
-  if (localStorage.getItem('eq_sound_notifications') === 'false') return;
-  try { const AC=window.AudioContext||window.webkitAudioContext; if(!AC)return; const ctx=new AC(), now=ctx.currentTime; [660,880].forEach((hz,i)=>{const o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=hz;g.gain.setValueAtTime(.0001,now+i*.12);g.gain.exponentialRampToValueAtTime(.07,now+i*.12+.025);g.gain.exponentialRampToValueAtTime(.0001,now+i*.12+.22);o.connect(g);g.connect(ctx.destination);o.start(now+i*.12);o.stop(now+i*.12+.24)}); setTimeout(()=>ctx.close(),700); } catch {}
+let notificationAudioContext = null;
+async function playNotificationSound(force = false) {
+  if (!force && localStorage.getItem('eq_sound_notifications') === 'false') return;
+  try {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return;
+    notificationAudioContext ||= new AudioContextClass();
+    const context = notificationAudioContext;
+    if (context.state === 'suspended') await context.resume();
+    const start = context.currentTime;
+    // A short, bright three-note chime at a comfortable notification level.
+    [{ hz: 880, at: 0, length: .19 }, { hz: 1175, at: .14, length: .23 }, { hz: 1047, at: .34, length: .28 }].forEach(note => {
+      for (const [ratio, level, type] of [[1, .24, 'sine'], [2, .055, 'triangle']]) {
+        const oscillator = context.createOscillator();
+        const gain = context.createGain();
+        const when = start + note.at;
+        oscillator.type = type;
+        oscillator.frequency.setValueAtTime(note.hz * ratio, when);
+        gain.gain.setValueAtTime(.0001, when);
+        gain.gain.linearRampToValueAtTime(level, when + .018);
+        gain.gain.exponentialRampToValueAtTime(.0001, when + note.length);
+        oscillator.connect(gain);
+        gain.connect(context.destination);
+        oscillator.start(when);
+        oscillator.stop(when + note.length + .015);
+      }
+    });
+  } catch {}
 }
 function notificationMarkup() { return `<div class="notification-head"><strong>Notificações</strong>${unreadNotifications?'<button class="action-link" id="mark-notifications-read">Marcar como lidas</button>':''}</div>${notifications.length?notifications.slice(0,12).map(item=>`<div class="notification-row ${item.readAt?'':'unread'}"><span class="notification-dot"></span><span><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.message)}</small><time>${dateFmt(item.createdAt)}</time></span></div>`).join(''):'<div class="notification-empty">Tudo em dia. As novidades da equipe aparecerão aqui.</div>'}`; }
 async function refreshNotifications(playSound=true) {
@@ -388,6 +413,27 @@ async function saveProfileSettings(event) {
   } catch (err) { error.textContent = err.message; error.classList.add('show'); }
   finally { button.disabled = false; }
 }
+async function saveAdminPersonalRate(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const error = document.querySelector('#admin-personal-rate-error');
+  const button = form.querySelector('button[type="submit"]');
+  const amount = Number(new FormData(form).get('rate'));
+  const rateCents = Math.round(amount * 100);
+  error.classList.remove('show');
+  if (!Number.isFinite(amount) || rateCents < 1 || rateCents > 10_000_000) {
+    error.textContent = 'Informe um valor entre R$ 0,01 e R$ 100.000,00.';
+    error.classList.add('show');
+    return;
+  }
+  button.disabled = true;
+  try {
+    await api('/api/admin/personal-rate', { method: 'PATCH', body: JSON.stringify({ rateCents }) });
+    notify('Seu valor por link foi atualizado.');
+    await refreshDashboardPreservingScroll();
+  } catch (err) { error.textContent = err.message; error.classList.add('show'); }
+  finally { button.disabled = false; }
+}
 async function savePasswordSettings(event) {
   event.preventDefault();
   const form = event.currentTarget;
@@ -443,11 +489,18 @@ async function saveLinkValue(userId) {
   } catch (error) { notify(error.message); }
   finally { button.disabled = false; }
 }
+function adminPersonalSettingsView() {
+  if (current?.role !== 'admin' || dashboardData?.impersonating) return '';
+  const rate = dashboardData?.adminLinkValueCents ?? 5000;
+  const count = dashboardData?.personalApprovedCount ?? 0;
+  const balance = dashboardData?.personalBalanceCents ?? count * rate;
+  return `<section class="settings-card admin-personal-settings"><div class="settings-card-head"><span class="settings-icon">${svg('spark', 16)}</span><div><h3>Meu saldo pessoal por link</h3><p>Seu ganho pessoal é calculado para cada link aprovado da equipe.</p></div></div><p class="admin-personal-explainer">Este valor é independente do saldo que você registra para pagar os membros e não diminui quando esses pagamentos são feitos.</p><form id="admin-personal-rate-form" class="settings-form"><label class="modal-field"><span>Quanto recebo por link aprovado?</span><span class="currency-input"><b>R$</b><input name="rate" type="number" min="0.01" max="100000" step="0.01" value="${(rate / 100).toFixed(2)}" required></span></label><div class="admin-personal-balance"><small>Saldo pessoal total · ${count} links aprovados</small><strong>${money(balance)}</strong></div><div class="settings-form-actions"><div class="login-error" id="admin-personal-rate-error"></div><button class="primary-btn compact" type="submit">Salvar meu valor</button></div></form></section>`;
+}
 function settingsView() {
   const theme = localStorage.getItem('eq_theme') === 'light' ? 'light' : 'dark';
   const compact = localStorage.getItem('eq_compact_mode') === 'true';
   const sound = localStorage.getItem('eq_sound_notifications') !== 'false';
-  return `<div class="settings-page"><section class="settings-intro"><div class="eyebrow">PREFERÊNCIAS DA CONTA</div><h2>Configurações</h2><p>Atualize seu perfil, escolha a aparência do painel e proteja seu acesso.</p></section><section class="settings-card"><div class="settings-card-head"><span class="settings-icon">${svg('users', 16)}</span><div><h3>Dados do perfil</h3><p>Seu nome, usuário e e-mail usados pela equipe.</p></div></div><form id="profile-settings-form" class="settings-form"><label class="modal-field"><span>Nome completo</span><input name="name" value="${escapeHtml(current?.name)}" minlength="2" maxlength="80" required></label><label class="modal-field"><span>Nome de usuário</span><input name="username" value="${escapeHtml(current?.username)}" minlength="3" maxlength="32" pattern="[A-Za-z0-9._-]+" required></label><label class="modal-field"><span>E-mail</span><input name="email" type="email" value="${escapeHtml(current?.email || '')}" maxlength="254" required></label><div class="settings-form-actions"><div class="login-error" id="profile-settings-error"></div><button class="primary-btn compact" type="submit">Salvar perfil</button></div></form></section>${profileSection()}<section class="settings-card"><div class="settings-card-head"><span class="settings-icon">${svg('spark', 16)}</span><div><h3>Aparência do painel</h3><p>Escolha o tema que fica melhor para você.</p></div></div><div class="theme-options"><label class="theme-option ${theme === 'dark' ? 'selected' : ''}"><input type="radio" name="site-theme" value="dark" ${theme === 'dark' ? 'checked' : ''}><span class="theme-swatch dark-swatch">◐</span><span><strong>Modo escuro</strong><small>Fundo escuro e detalhes azul-bebê</small></span></label><label class="theme-option ${theme === 'light' ? 'selected' : ''}"><input type="radio" name="site-theme" value="light" ${theme === 'light' ? 'checked' : ''}><span class="theme-swatch light-swatch">☼</span><span><strong>Modo claro</strong><small>Fundo claro e detalhes azul-bebê</small></span></label></div><label class="setting-toggle"><span><strong>Layout compacto</strong><small>Reduz os espaços entre os cartões do painel.</small></span><input id="compact-mode" type="checkbox" ${compact ? 'checked' : ''}><i></i></label><label class="setting-toggle"><span><strong>Alertas sonoros</strong><small>Som suave ao chegar uma notificação nova.</small></span><input id="sound-mode" type="checkbox" ${sound ? 'checked' : ''}><i></i></label></section><section class="settings-card"><div class="settings-card-head"><span class="settings-icon">${svg('shield', 16)}</span><div><h3>Senha e segurança</h3><p>${current?.role==='admin'?'Como administrador, você pode definir uma nova senha sem informar a atual.':'Confirme sua senha atual para definir uma nova.'}</p></div></div><form id="password-settings-form" class="settings-form password-settings-form">${current?.role==='admin'?'':`<label class="modal-field"><span>Senha atual</span><input name="currentPassword" type="password" autocomplete="current-password" required></label>`}<label class="modal-field"><span>Nova senha</span><input name="newPassword" type="password" minlength="8" maxlength="128" autocomplete="new-password" placeholder="Pelo menos 8 caracteres" required></label><label class="modal-field"><span>Confirme a nova senha</span><input name="confirmPassword" type="password" minlength="8" maxlength="128" autocomplete="new-password" required></label><div class="settings-form-actions"><div class="login-error" id="password-settings-error"></div><button class="primary-btn compact" type="submit">${current?.role==='admin'?'Redefinir senha':'Atualizar senha'}</button></div></form></section></div>`;
+  return `<div class="settings-page"><section class="settings-intro"><div class="eyebrow">PREFERÊNCIAS DA CONTA</div><h2>Configurações</h2><p>Atualize seu perfil, escolha a aparência do painel e proteja seu acesso.</p></section><section class="settings-card"><div class="settings-card-head"><span class="settings-icon">${svg('users', 16)}</span><div><h3>Dados do perfil</h3><p>Seu nome, usuário e e-mail usados pela equipe.</p></div></div><form id="profile-settings-form" class="settings-form"><label class="modal-field"><span>Nome completo</span><input name="name" value="${escapeHtml(current?.name)}" minlength="2" maxlength="80" required></label><label class="modal-field"><span>Nome de usuário</span><input name="username" value="${escapeHtml(current?.username)}" minlength="3" maxlength="32" pattern="[A-Za-z0-9._-]+" required></label><label class="modal-field"><span>E-mail</span><input name="email" type="email" value="${escapeHtml(current?.email || '')}" maxlength="254" required></label><div class="settings-form-actions"><div class="login-error" id="profile-settings-error"></div><button class="primary-btn compact" type="submit">Salvar perfil</button></div></form></section>${profileSection()}${adminPersonalSettingsView()}<section class="settings-card"><div class="settings-card-head"><span class="settings-icon">${svg('spark', 16)}</span><div><h3>Aparência do painel</h3><p>Escolha o tema que fica melhor para você.</p></div></div><div class="theme-options"><label class="theme-option ${theme === 'dark' ? 'selected' : ''}"><input type="radio" name="site-theme" value="dark" ${theme === 'dark' ? 'checked' : ''}><span class="theme-swatch dark-swatch">◐</span><span><strong>Modo escuro</strong><small>Fundo escuro e detalhes azul-bebê</small></span></label><label class="theme-option ${theme === 'light' ? 'selected' : ''}"><input type="radio" name="site-theme" value="light" ${theme === 'light' ? 'checked' : ''}><span class="theme-swatch light-swatch">☼</span><span><strong>Modo claro</strong><small>Fundo claro e detalhes azul-bebê</small></span></label></div><label class="setting-toggle"><span><strong>Layout compacto</strong><small>Reduz os espaços entre os cartões do painel.</small></span><input id="compact-mode" type="checkbox" ${compact ? 'checked' : ''}><i></i></label><label class="setting-toggle"><span><strong>Alertas sonoros</strong><small>Alerta musical tipo mensagem quando chegar algo novo.</small></span><input id="sound-mode" type="checkbox" ${sound ? 'checked' : ''}><i></i></label><div class="sound-test-row"><span><strong>Prévia do alerta</strong><small>Ouça o som de mensagem antes de salvar esta preferência.</small></span><button class="soft-btn" id="test-notification-sound" type="button">Testar som</button></div></section><section class="settings-card"><div class="settings-card-head"><span class="settings-icon">${svg('shield', 16)}</span><div><h3>Senha e segurança</h3><p>${current?.role==='admin'?'Como administrador, você pode definir uma nova senha sem informar a atual.':'Confirme sua senha atual para definir uma nova.'}</p></div></div><form id="password-settings-form" class="settings-form password-settings-form">${current?.role==='admin'?'':`<label class="modal-field"><span>Senha atual</span><input name="currentPassword" type="password" autocomplete="current-password" required></label>`}<label class="modal-field"><span>Nova senha</span><input name="newPassword" type="password" minlength="8" maxlength="128" autocomplete="new-password" placeholder="Pelo menos 8 caracteres" required></label><label class="modal-field"><span>Confirme a nova senha</span><input name="confirmPassword" type="password" minlength="8" maxlength="128" autocomplete="new-password" required></label><div class="settings-form-actions"><div class="login-error" id="password-settings-error"></div><button class="primary-btn compact" type="submit">${current?.role==='admin'?'Redefinir senha':'Atualizar senha'}</button></div></form></section></div>`;
 }
 function applyUiPreferences() {
   document.documentElement.dataset.theme = localStorage.getItem('eq_theme') === 'light' ? 'light' : 'dark';
@@ -455,7 +508,7 @@ function applyUiPreferences() {
 }
 function overviewView(isAdmin, welcomeName) {
   const activityFilter=isAdmin?`<select class="search-input activity-user-filter" id="activity-user-filter"><option value="all" ${activityUserFilter==='all'?'selected':''}>Toda a equipe</option>${members.filter(item=>item.role!=='admin').map(item=>`<option value="${escapeHtml(item.id)}" ${activityUserFilter===item.id?'selected':''}>${escapeHtml(item.name)}</option>`).join('')}</select>`:'';
-  return `<section class="welcome"><div><div class="eyebrow">${isAdmin ? 'PAINEL DO ADMINISTRADOR' : 'SEU ESPAÇO DE TRABALHO'}</div><h1>Olá, ${welcomeName} <span style="color:var(--mint)">✦</span></h1><p>Um novo dia para fazer boas ideias acontecerem.</p></div><div class="welcome-actions">${isAdmin ? `<button class="soft-btn" data-open-view="accounts">${svg('users', 14)} Ver contas</button><button class="primary-btn compact" data-open-view="create-account">${svg('plus', 14)} Nova conta</button>` : `<button class="soft-btn" id="copy-login">${svg('copy', 14)} Copiar meu login</button>`}<button class="soft-btn" data-open-view="ranking">${svg('chart', 14)} Ranking</button><button class="soft-btn" data-open-view="links">${svg('link', 14)} ${isAdmin ? 'Analisar links' : 'Meus links'}</button></div></section><section class="metrics">${(dashboardData?.stats || []).map(metricCard).join('')}</section><section><div class="section-title"><div><h2>Ritmo da operação</h2><p>${activityData.links||0} links enviados · ${activityData.approved||0} aprovados nesta visão</p></div>${activityFilter}</div><div class="content-grid"><article class="panel"><div class="panel-head"><h3>Movimento dos links</h3><span>Últimos 7 dias</span></div>${chartMarkup()}</article><article class="panel"><div class="panel-head"><h3>Camada de inteligência</h3><span class="module-state"><i></i> Conectada</span></div><div class="module-list"><div class="module-row"><span class="module-icon">${svg('spark', 15)}</span><span class="module-copy"><strong>Equipe em movimento</strong><small>Ranking e atividade atualizados</small></span><span class="module-state"><i></i> Ativo</span></div><div class="module-row"><span class="module-icon purple">${svg('shield', 15)}</span><span class="module-copy"><strong>Acesso protegido</strong><small>Contas geridas pelo administrador</small></span><span class="module-state"><i></i> Seguro</span></div></div></article></div><div class="access-banner"><span class="access-icon">${svg('lock', 16)}</span><span class="access-copy"><strong>${isAdmin ? 'Acesso administrativo' : 'Acesso individual'}</strong><p>${isAdmin ? 'As áreas de contas e análise de links estão disponíveis no menu.' : 'Seu login é pessoal. O administrador pode ajudar com alterações de acesso.'}</p></span>${isAdmin ? `<span class="role-pill">Administrador</span>` : `<span class="role-pill">${escapeHtml(current?.username)}</span>`}</div></section>`;
+  return `<section class="welcome"><div><div class="eyebrow">${isAdmin ? 'PAINEL DO ADMINISTRADOR' : 'SEU ESPAÇO DE TRABALHO'}</div><h1>Olá, ${welcomeName} <span style="color:var(--mint)">✦</span></h1><p>Um novo dia para fazer boas ideias acontecerem.</p></div><div class="welcome-actions">${isAdmin ? `<button class="soft-btn" data-open-view="accounts">${svg('users', 14)} Ver contas</button><button class="primary-btn compact" data-open-view="create-account">${svg('plus', 14)} Nova conta</button>` : `<button class="soft-btn" id="copy-login">${svg('copy', 14)} Copiar meu login</button>`}<button class="soft-btn" data-open-view="ranking">${svg('chart', 14)} Ranking</button><button class="soft-btn" data-open-view="links">${svg('link', 14)} ${isAdmin ? 'Analisar links' : 'Meus links'}</button></div></section><section class="metrics ${isAdmin ? 'metrics-admin' : ''}">${(dashboardData?.stats || []).map(metricCard).join('')}</section><section><div class="section-title"><div><h2>Ritmo da operação</h2><p>${activityData.links||0} links enviados · ${activityData.approved||0} aprovados nesta visão</p></div>${activityFilter}</div><div class="content-grid"><article class="panel"><div class="panel-head"><h3>Movimento dos links</h3><span>Últimos 7 dias</span></div>${chartMarkup()}</article><article class="panel"><div class="panel-head"><h3>Camada de inteligência</h3><span class="module-state"><i></i> Conectada</span></div><div class="module-list"><div class="module-row"><span class="module-icon">${svg('spark', 15)}</span><span class="module-copy"><strong>Equipe em movimento</strong><small>Ranking e atividade atualizados</small></span><span class="module-state"><i></i> Ativo</span></div><div class="module-row"><span class="module-icon purple">${svg('shield', 15)}</span><span class="module-copy"><strong>Acesso protegido</strong><small>Contas geridas pelo administrador</small></span><span class="module-state"><i></i> Seguro</span></div></div></article></div><div class="access-banner"><span class="access-icon">${svg('lock', 16)}</span><span class="access-copy"><strong>${isAdmin ? 'Acesso administrativo' : 'Acesso individual'}</strong><p>${isAdmin ? 'As áreas de contas e análise de links estão disponíveis no menu.' : 'Seu login é pessoal. O administrador pode ajudar com alterações de acesso.'}</p></span>${isAdmin ? `<span class="role-pill">Administrador</span>` : `<span class="role-pill">${escapeHtml(current?.username)}</span>`}</div></section>`;
 }
 function renderDashboard() {
   const isAdmin = current?.role === 'admin' && !dashboardData?.impersonating;
@@ -486,6 +539,7 @@ function renderDashboard() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }));
   document.querySelector('#create-user-form')?.addEventListener('submit', createAccount);
+  document.querySelector('#admin-personal-rate-form')?.addEventListener('submit', saveAdminPersonalRate);
   document.querySelectorAll('[data-save-link-value]').forEach(button => button.addEventListener('click', () => saveLinkValue(button.dataset.saveLinkValue)));
   document.querySelector('#profile-settings-form')?.addEventListener('submit', saveProfileSettings);
   document.querySelector('#password-settings-form')?.addEventListener('submit', savePasswordSettings);
@@ -499,7 +553,8 @@ function renderDashboard() {
     localStorage.setItem('eq_compact_mode', String(event.currentTarget.checked)); applyUiPreferences();
     notify(event.currentTarget.checked ? 'Layout compacto ativado.' : 'Layout padrão ativado.');
   });
-  document.querySelector('#sound-mode')?.addEventListener('change', event => { localStorage.setItem('eq_sound_notifications',String(event.currentTarget.checked)); notify(event.currentTarget.checked?'Alertas sonoros ativados.':'Alertas sonoros desativados.'); });
+  document.querySelector('#sound-mode')?.addEventListener('change', event => { localStorage.setItem('eq_sound_notifications',String(event.currentTarget.checked)); notify(event.currentTarget.checked?'Alertas sonoros ativados.':'Alertas sonoros desativados.'); if(event.currentTarget.checked) playNotificationSound(true); });
+  document.querySelector('#test-notification-sound')?.addEventListener('click', () => playNotificationSound(true));
   document.querySelector('#activity-user-filter')?.addEventListener('change',async event=>{activityUserFilter=event.currentTarget.value;await fetchInsights();renderDashboard();});
   document.querySelector('#user-search')?.addEventListener('input', event => {
     const query = event.currentTarget.value.toLowerCase().trim();

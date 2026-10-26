@@ -247,6 +247,18 @@ function linkRateFor(user) { return Number.isInteger(user?.linkValueCents) && us
 function linkValueFor(link) { return Number.isInteger(link.valueCents) && link.valueCents >= 0 ? link.valueCents : 5000; }
 function balanceFor(userId) { return links.filter(link => link.userId === userId && link.status === 'approved').reduce((total, link) => total + linkValueFor(link), 0); }
 function teamBalance() { return links.filter(link => link.status === 'approved').reduce((total, link) => total + linkValueFor(link), 0); }
+function adminLinkRateFor(admin) { return Number.isInteger(admin?.adminLinkValueCents) && admin.adminLinkValueCents >= 0 ? admin.adminLinkValueCents : 5000; }
+function adminApprovedLinkCount(admin) {
+  const memberHistory = users.filter(member => member.role !== 'admin').reduce((total, member) => total + Math.max(0, Number(member.approvedLinks) || 0), 0);
+  const recordedHistory = links.filter(link => link.status === 'approved').length + payouts.reduce((total, payout) => total + (Array.isArray(payout.linkIds) ? payout.linkIds.length : 0), 0);
+  const estimate = Math.max(memberHistory, recordedHistory);
+  if (!Number.isInteger(admin.approvedLinksTotal) || admin.approvedLinksTotal < estimate) {
+    admin.approvedLinksTotal = estimate;
+    saveUsers(users);
+  }
+  return admin.approvedLinksTotal;
+}
+function adminPersonalBalance(admin) { return adminApprovedLinkCount(admin) * adminLinkRateFor(admin); }
 function cleanLink(link) {
   return { id: link.id, publicId: link.publicId, userId: link.userId, userName: link.userName, username: link.username, label: link.label, url: link.url, status: link.status, valueCents: link.status === 'approved' ? linkValueFor(link) : 0, createdAt: link.createdAt, decidedAt: link.decidedAt || null, decidedBy: link.decidedBy || null, reason: link.reason || '' };
 }
@@ -301,8 +313,10 @@ async function handleApi(req, res, url) {
     const userLinks = links.filter(link => link.userId === user.id);
     const approvedCount = userLinks.filter(link => link.status === 'approved').length;
     const balanceCents = user.role === 'admin' ? teamBalance() : balanceFor(user.id);
+    const personalApprovedCount = user.role === 'admin' ? adminApprovedLinkCount(user) : 0;
+    const personalBalanceCents = personalApprovedCount * adminLinkRateFor(user);
     const pendingCount = user.role === 'admin' ? links.filter(link => link.status === 'pending').length : userLinks.filter(link => link.status === 'pending').length;
-    return json(res, 200, { user: cleanUser(user), stats: [{ label: 'Pessoas na equipe', value: String(active).padStart(2, '0'), detail: 'contas ativas', icon: 'people' }, { label: user.role === 'admin' ? 'Links pendentes' : 'Seus links', value: String(user.role === 'admin' ? pendingCount : userLinks.length).padStart(2, '0'), detail: user.role === 'admin' ? 'aguardando análise' : 'sem limite de envio', icon: 'shield' }, { label: user.role === 'admin' ? 'Saldo aprovado' : 'Saldo ilustrativo', value: (balanceCents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }), detail: user.role === 'admin' ? 'total da equipe' : `${approvedCount} links aprovados`, icon: 'spark' }], members: recent, admin: user.role === 'admin', balanceCents, approvedCount, pendingCount, impersonating: found.session.adminMode });
+    return json(res, 200, { user: cleanUser(user), stats: [{ label: 'Pessoas na equipe', value: String(active).padStart(2, '0'), detail: 'contas ativas', icon: 'people' }, { label: user.role === 'admin' ? 'Links pendentes' : 'Seus links', value: String(user.role === 'admin' ? pendingCount : userLinks.length).padStart(2, '0'), detail: user.role === 'admin' ? 'aguardando análise' : 'sem limite de envio', icon: 'shield' }, { label: user.role === 'admin' ? 'Saldo aprovado da equipe' : 'Saldo ilustrativo', value: (balanceCents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }), detail: user.role === 'admin' ? 'disponível para pagamentos' : `${approvedCount} links aprovados`, icon: 'spark' }, ...(user.role === 'admin' ? [{ label: 'Meu saldo pessoal', value: (personalBalanceCents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }), detail: `${personalApprovedCount} links da equipe · ${moneyLabel(adminLinkRateFor(user))} por link`, icon: 'spark' }] : [])], members: recent, admin: user.role === 'admin', balanceCents, personalBalanceCents, personalApprovedCount, adminLinkValueCents: user.role === 'admin' ? adminLinkRateFor(user) : null, approvedCount, pendingCount, impersonating: found.session.adminMode });
   }
   if (url.pathname === '/api/return-admin' && req.method === 'POST') {
     const admin = users.find(item => item.id === found.session.originalUserId && item.role === 'admin' && item.active);
@@ -380,6 +394,17 @@ async function handleApi(req, res, url) {
     addNotification(target.id,'payout','Pagamento registrado',`${moneyLabel(record.amountCents)} registrado para ${record.linkIds.length} links aprovados.`,{ payoutId:record.id });
     return json(res,200,{ payout:record });
   }
+  if (url.pathname === '/api/admin/personal-rate' && req.method === 'PATCH') {
+    if (user.role !== 'admin' || found.session.adminMode) return json(res, 403, { error: 'Apenas o administrador pode alterar o próprio valor por link.' });
+    let body;
+    try { body = await readBody(req); } catch (error) { return json(res, 400, { error: error.message }); }
+    const rateCents = Number(body.rateCents);
+    if (!Number.isInteger(rateCents) || rateCents < 1 || rateCents > 10_000_000) return json(res, 400, { error: 'O valor por link deve estar entre R$ 0,01 e R$ 100.000,00.' });
+    const approvedCount = adminApprovedLinkCount(user);
+    user.adminLinkValueCents = rateCents;
+    saveUsers(users);
+    return json(res, 200, { rateCents, approvedCount, balanceCents: approvedCount * rateCents });
+  }
   const linkDecisionId = url.pathname.match(/^\/api\/links\/([^/]+)\/decision$/)?.[1];
   if (linkDecisionId && req.method === 'POST') {
     if (user.role !== 'admin' || found.session.adminMode) return json(res, 403, { error: 'Apenas a administração pode analisar links.' });
@@ -389,11 +414,13 @@ async function handleApi(req, res, url) {
     if (!link) return json(res, 404, { error: 'Link não encontrado.' });
     if (link.status !== 'pending') return json(res, 409, { error: 'Este link já foi analisado.' });
     if (!['approved', 'rejected'].includes(body.status)) return json(res, 400, { error: 'Escolha aprovar ou desaprovar o link.' });
+    const admin = body.status === 'approved' ? users.find(item => item.role === 'admin') : null;
+    const adminApprovedCountBefore = admin ? adminApprovedLinkCount(admin) : 0;
     link.status = body.status;
     link.decidedAt = new Date().toISOString();
     link.decidedBy = user.id;
     link.reason = body.status === 'rejected' ? String(body.reason || '').trim().slice(0, 240) : '';
-    if(body.status==='approved'){const owner=users.find(item=>item.id===link.userId);link.valueCents=linkRateFor(owner);if(owner){owner.approvedLinks=(owner.approvedLinks||0)+1;saveUsers(users)}}
+    if(body.status==='approved'){const owner=users.find(item=>item.id===link.userId);link.valueCents=linkRateFor(owner);if(owner){owner.approvedLinks=(owner.approvedLinks||0)+1}if(admin){admin.approvedLinksTotal=adminApprovedCountBefore+1;saveUsers(users)}}
     const activity = linkActivity.find(item=>item.id===link.id); if(activity){activity.status=link.status;saveList(ACTIVITY_FILE,linkActivity)}
     saveLinks(links);
     addNotification(link.userId, body.status === 'approved' ? 'link-approved' : 'link-rejected', body.status === 'approved' ? 'Link aprovado' : 'Link desaprovado', `${link.publicId} foi ${body.status === 'approved' ? `aprovado · ${moneyLabel(link.valueCents)}` : 'desaprovado'}${link.reason ? `: ${link.reason}` : '.'}`, { linkId: link.id });
