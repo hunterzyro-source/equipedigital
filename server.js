@@ -198,7 +198,7 @@ function expireOldRejections(force = false) {
   if (!force && now - lastRejectedCleanup < 60_000) return;
   lastRejectedCleanup = now;
   const cutoff = now - 3 * 24 * 60 * 60 * 1000;
-  const kept = links.filter(link => link.status !== 'rejected' || new Date(link.decidedAt || link.createdAt).getTime() > cutoff);
+  const kept = links.filter(link => link.status !== 'rejected' || link.reanalysisRequestedAt || new Date(link.decidedAt || link.createdAt).getTime() > cutoff);
   if (kept.length !== links.length) { links = kept; saveLinks(links); }
 }
 function fingerprintUrl(parsed) {
@@ -242,7 +242,7 @@ function sessionFor(req) {
 }
 function currentUser(session) { return users.find(user => user.id === session.userId && user.active); }
 function csrfOkay(req, session) { return req.headers['x-csrf-token'] === session.csrf; }
-function cleanUser(user) { return user ? { id: user.id, name: user.name, username: user.username, email: user.email || '', avatar: user.avatar || '', role: user.role, active: user.active, createdAt: user.createdAt } : null; }
+function cleanUser(user) { return user ? { id: user.id, name: user.name, username: user.username, email: user.email || '', avatar: user.avatar ? `${user.avatar}?v=${encodeURIComponent(user.avatarUpdatedAt || '1')}` : '', role: user.role, active: user.active, createdAt: user.createdAt } : null; }
 function linkRateFor(user) { return Number.isInteger(user?.linkValueCents) && user.linkValueCents >= 0 ? user.linkValueCents : 5000; }
 function linkValueFor(link) { return Number.isInteger(link.valueCents) && link.valueCents >= 0 ? link.valueCents : 5000; }
 function balanceFor(userId) { return links.filter(link => link.userId === userId && link.status === 'approved').reduce((total, link) => total + linkValueFor(link), 0); }
@@ -266,7 +266,7 @@ function adminPersonalBalance(admin) {
   return admin.personalBalanceCents;
 }
 function cleanLink(link) {
-  return { id: link.id, publicId: link.publicId, userId: link.userId, userName: link.userName, username: link.username, label: link.label, url: link.url, status: link.status, valueCents: link.status === 'approved' ? linkValueFor(link) : 0, createdAt: link.createdAt, decidedAt: link.decidedAt || null, decidedBy: link.decidedBy || null, reason: link.reason || '' };
+  return { id: link.id, publicId: link.publicId, userId: link.userId, userName: link.userName, username: link.username, label: link.label, url: link.url, status: link.status, valueCents: link.status === 'approved' ? linkValueFor(link) : 0, createdAt: link.createdAt, decidedAt: link.decidedAt || null, decidedBy: link.decidedBy || null, reason: link.reason || '', reanalysisRequestedAt: link.reanalysisRequestedAt || null };
 }
 function createSession(user, remember, previous = null) {
   const sid = crypto.randomBytes(32).toString('hex');
@@ -321,7 +321,7 @@ async function handleApi(req, res, url) {
     const balanceCents = user.role === 'admin' ? teamBalance() : balanceFor(user.id);
     const personalApprovedCount = user.role === 'admin' ? adminApprovedLinkCount(user) : 0;
     const personalBalanceCents = user.role === 'admin' ? adminPersonalBalance(user) : 0;
-    const pendingCount = user.role === 'admin' ? links.filter(link => link.status === 'pending').length : userLinks.filter(link => link.status === 'pending').length;
+    const pendingCount = user.role === 'admin' ? links.filter(link => link.status === 'pending' || (link.status === 'rejected' && link.reanalysisRequestedAt)).length : userLinks.filter(link => link.status === 'pending').length;
     return json(res, 200, { user: cleanUser(user), stats: [{ label: 'Pessoas na equipe', value: String(active).padStart(2, '0'), detail: 'contas ativas', icon: 'people' }, { label: user.role === 'admin' ? 'Links pendentes' : 'Seus links', value: String(user.role === 'admin' ? pendingCount : userLinks.length).padStart(2, '0'), detail: user.role === 'admin' ? 'aguardando análise' : 'sem limite de envio', icon: 'shield' }, { label: user.role === 'admin' ? 'Saldo aprovado da equipe' : 'Saldo ilustrativo', value: (balanceCents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }), detail: user.role === 'admin' ? 'disponível para pagamentos' : `${approvedCount} links aprovados`, icon: 'spark' }, ...(user.role === 'admin' ? [{ label: 'Meu saldo pessoal', value: (personalBalanceCents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }), detail: `${personalApprovedCount} links da equipe · ${moneyLabel(adminLinkRateFor(user))} por link`, icon: 'spark' }] : [])], members: recent, admin: user.role === 'admin', balanceCents, personalBalanceCents, personalApprovedCount, adminLinkValueCents: user.role === 'admin' ? adminLinkRateFor(user) : null, approvedCount, pendingCount, impersonating: found.session.adminMode });
   }
   if (url.pathname === '/api/return-admin' && req.method === 'POST') {
@@ -338,9 +338,9 @@ async function handleApi(req, res, url) {
       if (!target) return json(res, 404, { error: 'Usuário não encontrado.' });
     }
     const visible = links.filter(link => user.role === 'admin' ? (!requestedUserId || requestedUserId === 'all' || link.userId === requestedUserId) : link.userId === user.id)
-      .sort((a, b) => Number(a.status !== 'pending') - Number(b.status !== 'pending') || b.createdAt.localeCompare(a.createdAt));
+      .sort((a, b) => Number(a.status !== 'pending') - Number(b.status !== 'pending') || Number(!a.reanalysisRequestedAt) - Number(!b.reanalysisRequestedAt) || b.createdAt.localeCompare(a.createdAt));
     const rateUser = user.role === 'admin' ? users.find(member => member.id === requestedUserId) : user;
-    return json(res, 200, { links: visible.map(cleanLink), balanceCents: user.role === 'admin' ? (requestedUserId && requestedUserId !== 'all' ? balanceFor(requestedUserId) : teamBalance()) : balanceFor(user.id), valuePerLinkCents: rateUser ? linkRateFor(rateUser) : null, pendingCount: visible.filter(link => link.status === 'pending').length });
+    return json(res, 200, { links: visible.map(cleanLink), balanceCents: user.role === 'admin' ? (requestedUserId && requestedUserId !== 'all' ? balanceFor(requestedUserId) : teamBalance()) : balanceFor(user.id), valuePerLinkCents: rateUser ? linkRateFor(rateUser) : null, pendingCount: visible.filter(link => link.status === 'pending' || (user.role === 'admin' && link.status === 'rejected' && link.reanalysisRequestedAt)).length });
   }
   if (url.pathname === '/api/links' && req.method === 'POST') {
     expireOldRejections();
@@ -354,7 +354,7 @@ async function handleApi(req, res, url) {
     const fingerprint = fingerprintUrl(parsed);
     if (linkFingerprints.has(fingerprint)) return json(res, 409, { error: 'Este link já foi enviado anteriormente.' });
     const label = String(body.label || '').trim().slice(0, 120);
-    const created = { id: crypto.randomUUID(), publicId: `ED-${Date.now().toString(36).toUpperCase()}-${crypto.randomBytes(2).toString('hex').toUpperCase()}`, userId: user.id, userName: user.name, username: user.username, label, url: parsed.href, fingerprint, status: 'pending', createdAt: new Date().toISOString(), decidedAt: null, decidedBy: null, reason: '' };
+    const created = { id: crypto.randomUUID(), publicId: `ED-${Date.now().toString(36).toUpperCase()}-${crypto.randomBytes(2).toString('hex').toUpperCase()}`, userId: user.id, userName: user.name, username: user.username, label, url: parsed.href, fingerprint, status: 'pending', createdAt: new Date().toISOString(), decidedAt: null, decidedBy: null, reason: '', valueCents: 0, reanalysisRequestedAt: null };
     links.push(created); saveLinks(links);
     linkActivity.push({ id: created.id, userId: user.id, createdAt: created.createdAt, status: 'pending' }); saveList(ACTIVITY_FILE, linkActivity);
     user.submittedLinks = (user.submittedLinks || 0) + 1; saveUsers(users);
@@ -412,6 +412,19 @@ async function handleApi(req, res, url) {
     saveUsers(users);
     return json(res, 200, { rateCents, approvedCount, balanceCents });
   }
+  const reanalysisId = url.pathname.match(/^\/api\/links\/([^/]+)\/reanalysis$/)?.[1];
+  if (reanalysisId && req.method === 'POST') {
+    if (user.role === 'admin' || found.session.adminMode) return json(res, 403, { error: 'Somente o membro responsável pode pedir reanálise.' });
+    const link = links.find(item => item.id === reanalysisId && item.userId === user.id);
+    if (!link) return json(res, 404, { error: 'Link não encontrado.' });
+    if (link.status !== 'rejected') return json(res, 409, { error: 'A reanálise está disponível somente para links desaprovados.' });
+    if (link.reanalysisRequestedAt) return json(res, 409, { error: 'A reanálise deste link já foi solicitada.' });
+    link.reanalysisRequestedAt = new Date().toISOString();
+    saveLinks(links);
+    const admin = users.find(item => item.role === 'admin' && item.active);
+    addNotification(admin?.id, 'link-reanalysis', 'Pedido de reanálise', `${user.name} pediu uma nova análise do link ${link.publicId}.`, { linkId: link.id });
+    return json(res, 200, { link: cleanLink(link) });
+  }
   const linkDecisionId = url.pathname.match(/^\/api\/links\/([^/]+)\/decision$/)?.[1];
   if (linkDecisionId && req.method === 'POST') {
     if (user.role !== 'admin' || found.session.adminMode) return json(res, 403, { error: 'Apenas a administração pode analisar links.' });
@@ -419,7 +432,8 @@ async function handleApi(req, res, url) {
     try { body = await readBody(req); } catch (error) { return json(res, 400, { error: error.message }); }
     const link = links.find(item => item.id === linkDecisionId);
     if (!link) return json(res, 404, { error: 'Link não encontrado.' });
-    if (link.status !== 'pending') return json(res, 409, { error: 'Este link já foi analisado.' });
+    const canReanalyze = link.status === 'rejected' && Boolean(link.reanalysisRequestedAt);
+    if (link.status !== 'pending' && !canReanalyze) return json(res, 409, { error: 'Este link já foi analisado.' });
     if (!['approved', 'rejected'].includes(body.status)) return json(res, 400, { error: 'Escolha aprovar ou desaprovar o link.' });
     const admin = body.status === 'approved' ? users.find(item => item.role === 'admin') : null;
     const adminApprovedCountBefore = admin ? adminApprovedLinkCount(admin) : 0;
@@ -428,7 +442,9 @@ async function handleApi(req, res, url) {
     link.decidedAt = new Date().toISOString();
     link.decidedBy = user.id;
     link.reason = body.status === 'rejected' ? String(body.reason || '').trim().slice(0, 240) : '';
-    if(body.status==='approved'){const owner=users.find(item=>item.id===link.userId);link.valueCents=linkRateFor(owner);if(owner){owner.approvedLinks=(owner.approvedLinks||0)+1}if(admin){admin.approvedLinksTotal=adminApprovedCountBefore+1;admin.personalBalanceCents=adminPersonalBalanceBefore+adminLinkRateFor(admin);saveUsers(users)}}
+    link.reanalysisRequestedAt = null;
+    if (body.status === 'approved') { const owner = users.find(item => item.id === link.userId); link.valueCents = linkRateFor(owner); if (owner) owner.approvedLinks = (owner.approvedLinks || 0) + 1; if (admin) { admin.approvedLinksTotal = adminApprovedCountBefore + 1; admin.personalBalanceCents = adminPersonalBalanceBefore + adminLinkRateFor(admin); saveUsers(users); } }
+    else link.valueCents = 0;
     const activity = linkActivity.find(item=>item.id===link.id); if(activity){activity.status=link.status;saveList(ACTIVITY_FILE,linkActivity)}
     saveLinks(links);
     addNotification(link.userId, body.status === 'approved' ? 'link-approved' : 'link-rejected', body.status === 'approved' ? 'Link aprovado' : 'Link desaprovado', `${link.publicId} foi ${body.status === 'approved' ? `aprovado · ${moneyLabel(link.valueCents)}` : 'desaprovado'}${link.reason ? `: ${link.reason}` : '.'}`, { linkId: link.id });
@@ -503,6 +519,7 @@ async function handleApi(req, res, url) {
       fs.writeFileSync(path.join(avatarDir, `${user.id}.${extension}`), bytes, { mode: 0o600 });
     }
     user.avatar = `/avatars/${user.id}.${extension}`;
+    user.avatarUpdatedAt = new Date().toISOString();
     saveUsers(users);
     return json(res, 200, { user: cleanUser(user) });
   }
@@ -511,6 +528,7 @@ async function handleApi(req, res, url) {
     if (databasePool) await activeDatabaseClient.query('delete from equipe_digital_private.avatars where path like $1', [`/avatars/${user.id}.%`]);
     else for (const ext of ['png', 'jpg', 'webp']) { try { fs.unlinkSync(path.join(avatarDir, `${user.id}.${ext}`)); } catch {} }
     user.avatar = '';
+    user.avatarUpdatedAt = null;
     saveUsers(users);
     return json(res, 200, { user: cleanUser(user) });
   }
