@@ -71,7 +71,12 @@ async function api(url, options = {}) {
   const response = await fetch(url, { credentials: 'same-origin', cache: 'no-store', ...options, headers });
   let data;
   try { data = await response.json(); } catch { data = {}; }
-  if (!response.ok) throw Object.assign(new Error(data.error || 'Não foi possível concluir a ação.'), { status: response.status });
+  if (!response.ok) {
+    const fallback = response.status === 404
+      ? 'A API do sistema não foi encontrada nesta implantação. Aguarde a publicação mais recente da Vercel.'
+      : `O servidor não concluiu a solicitação (erro ${response.status}). Tente novamente em instantes.`;
+    throw Object.assign(new Error(data.error || fallback), { status: response.status });
+  }
   return data;
 }
 

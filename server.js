@@ -262,7 +262,19 @@ async function handleApi(req, res, url) {
     try { body = await readBody(req); } catch (error) { return json(res, 400, { error: error.message }); }
     const username = String(body.username || '').trim().toLowerCase();
     const password = String(body.password || '');
-    const user = users.find(item => (item.username === username || item.email?.toLowerCase() === username) && item.active);
+    let user = users.find(item => (item.username === username || item.email?.toLowerCase() === username) && item.active);
+    // The database may have been seeded locally before the Vercel environment
+    // variables were set. Let the configured environment credentials recover
+    // the administrator account and persist the matching password hash.
+    const isEnvironmentAdmin = username === ADMIN_USERNAME || (ADMIN_EMAIL && username === ADMIN_EMAIL);
+    if (isEnvironmentAdmin && password === ADMIN_PASSWORD) {
+      const administrator = users.find(item => item.role === 'admin' && item.active);
+      if (administrator) {
+        user = administrator;
+        Object.assign(user, { name: ADMIN_NAME, username: ADMIN_USERNAME, email: ADMIN_EMAIL || user.email || '', ...hashPassword(password) });
+        saveUsers(users);
+      }
+    }
     const candidate = crypto.scryptSync(password.slice(0, 256), user?.salt || 'invalid-user-salt', 64).toString('hex');
     if (!user || !safeEqual(candidate, user.hash)) return json(res, 401, { error: 'Usuário ou senha incorretos.' });
     const created = createSession(user, Boolean(body.remember));
