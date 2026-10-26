@@ -24,21 +24,14 @@ html[data-theme="light"] body,html[data-theme="light"] .app-shell{background:#f3
 @media(max-width:1100px){.metrics-admin{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:760px){.metrics-admin{grid-template-columns:repeat(2,minmax(0,1fr))}.admin-personal-settings .settings-form{grid-template-columns:1fr}.admin-personal-balance,.admin-personal-settings .settings-form-actions{grid-column:1/-1}}
 
-/* Layout adaptável do modal de redefinição de senha */
-.password-modal-backdrop{overflow-y:auto;overscroll-behavior:contain;padding:clamp(12px,4vw,24px)}
-.password-modal{width:min(100%,420px);max-height:calc(100vh - 24px);max-height:calc(100dvh - 24px);overflow-y:auto;overscroll-behavior:contain;padding:clamp(18px,5vw,25px)}
-.password-modal .modal-head{gap:12px;min-width:0}
-.password-modal .modal-head>div{min-width:0;overflow-wrap:anywhere}
-.password-modal .modal-head p{line-height:1.55}
-.password-modal .modal-field input{min-width:0}
+/* Modal de senha renderizado no top layer nativo do navegador */
+.password-reset-dialog{position:fixed;inset:0;margin:auto;box-sizing:border-box;width:min(420px,calc(100vw - 24px));max-width:calc(100vw - 24px);max-height:calc(100vh - 24px);max-height:calc(100dvh - 24px);overflow-y:auto;overscroll-behavior:contain;color:var(--text);}
+.password-reset-dialog::backdrop{background:rgba(3,8,10,.78);backdrop-filter:blur(7px)}
+.password-reset-dialog .modal-head{gap:12px;min-width:0}
+.password-reset-dialog .modal-head>div{min-width:0;overflow-wrap:anywhere}
+.password-reset-dialog .modal-head p{line-height:1.55}
+.password-reset-dialog .modal-field input{min-width:0}
 .password-modal-help{color:#80908a;font-size:10px;line-height:1.5}
-.password-modal .modal-actions{flex-wrap:wrap}
-.password-modal .modal-actions button{min-height:42px}
-@media(max-width:480px){.password-modal-backdrop{padding:12px 12px max(12px,env(safe-area-inset-bottom))}.password-modal{width:100%;border-radius:14px;padding:18px}.password-modal .modal-head{margin-bottom:16px}.password-modal .modal-head h2{font-size:19px}.password-modal .modal-actions{flex-direction:column-reverse;align-items:stretch;gap:9px;margin-top:16px}.password-modal .modal-actions button{width:100%;min-height:44px}}
-@media(max-height:560px){.password-modal-backdrop{align-items:start}.password-modal{margin-block:auto}}
-
-/* Centraliza o modal na área visível sem deixar o teclado móvel empurrá-lo para fora */
-.password-modal-backdrop{position:fixed;inset:0;width:100%;height:100vh;height:100dvh;display:flex;place-items:unset;align-items:center;justify-content:center;box-sizing:border-box;overflow-x:hidden;overflow-y:auto;padding:16px}
-.password-modal{box-sizing:border-box;flex:0 1 420px;width:min(100%,420px);min-width:0;max-height:calc(100vh - 32px);max-height:calc(100dvh - 32px);margin:auto;overflow-y:auto}
-@media(max-width:480px){.password-modal-backdrop{padding:12px max(12px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left))}.password-modal{flex-basis:100%;width:100%;max-height:calc(100vh - 24px);max-height:calc(100dvh - 24px)}}
-@media(max-height:560px){.password-modal-backdrop{align-items:flex-start}.password-modal{margin:12px auto}}
+.password-reset-dialog .modal-actions{flex-wrap:wrap}
+.password-reset-dialog .modal-actions button{min-height:42px}
+@media(max-width:480px){.password-reset-dialog{padding:18px;border-radius:14px}.password-reset-dialog .modal-head{margin-bottom:16px}.password-reset-dialog .modal-head h2{font-size:19px}.password-reset-dialog .modal-actions{flex-direction:column-reverse;align-items:stretch;gap:9px;margin-top:16px}.password-reset-dialog .modal-actions button{width:100%;min-height:44px}}

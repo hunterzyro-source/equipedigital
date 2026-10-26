@@ -344,16 +344,23 @@ function showCreateUser() {
   modal.querySelector('#new-name').focus();
 }
 function showPasswordChange(target) {
-  const modal = showModal(`<section class="modal password-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" tabindex="-1"><div class="modal-head"><div><div class="eyebrow">ACESSO DA EQUIPE</div><h2 id="modal-title">Redefinir senha</h2><p>Nova senha para <strong>${escapeHtml(target.name)}</strong>.</p></div><button class="icon-btn" data-close aria-label="Fechar">${svg('close')}</button></div><form id="change-password-form"><div class="modal-field"><label for="change-password">Nova senha</label><input id="change-password" type="password" name="password" placeholder="Pelo menos 8 caracteres" minlength="8" maxlength="128" autocomplete="new-password" required><small class="password-modal-help">Use no mínimo 8 caracteres.</small></div><div class="login-error" id="modal-error"></div><div class="modal-actions"><button class="soft-btn" type="button" data-close>Cancelar</button><button class="primary-btn compact" type="submit">Salvar senha</button></div></form></section>`);
-  modal.classList.add('password-modal-backdrop');
+  const modal = document.createElement('dialog');
+  modal.className = 'modal password-modal password-reset-dialog';
+  modal.setAttribute('aria-labelledby', 'modal-title');
+  modal.innerHTML = `<div class="modal-head"><div><div class="eyebrow">ACESSO DA EQUIPE</div><h2 id="modal-title">Redefinir senha</h2><p>Nova senha para <strong>${escapeHtml(target.name)}</strong>.</p></div><button class="icon-btn" type="button" data-close aria-label="Fechar">${svg('close')}</button></div><form id="change-password-form"><div class="modal-field"><label for="change-password">Nova senha</label><input id="change-password" type="password" name="password" placeholder="Pelo menos 8 caracteres" minlength="8" maxlength="128" autocomplete="new-password" required><small class="password-modal-help">Use no mínimo 8 caracteres.</small></div><div class="login-error" id="modal-error"></div><div class="modal-actions"><button class="soft-btn" type="button" data-close>Cancelar</button><button class="primary-btn compact" type="submit">Salvar senha</button></div></form>`;
+  document.body.append(modal);
+  modal.showModal();
+  modal.addEventListener('close', () => modal.remove(), { once: true });
+  modal.addEventListener('click', event => {
+    if (event.target === modal || event.target.closest?.('[data-close]')) { modal.close(); modal.remove(); }
+  });
   modal.querySelector('#change-password-form').addEventListener('submit', async event => {
     event.preventDefault();
     const password = new FormData(event.currentTarget).get('password');
     const error = modal.querySelector('#modal-error');
-    try { await api(`/api/users/${target.id}`, { method: 'PATCH', body: JSON.stringify({ password }) }); modal.remove(); notify('Senha atualizada.'); }
+    try { await api(`/api/users/${target.id}`, { method: 'PATCH', body: JSON.stringify({ password }) }); modal.close(); modal.remove(); notify('Senha atualizada.'); }
     catch (err) { error.textContent = err.message; error.classList.add('show'); }
   });
-  modal.querySelector('.password-modal').focus({ preventScroll: true });
 }
 async function openDashboard() {
   try {
