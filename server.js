@@ -503,7 +503,15 @@ async function handleApi(req, res, url) {
     const index = users.findIndex(item => item.id === targetId && item.role !== 'admin');
     if (index < 0) return json(res, 404, { error: 'Conta não encontrada.' });
     const [removed] = users.splice(index, 1); saveUsers(users);
+    const removedLinkIds = new Set(links.filter(item => item.userId === removed.id).map(item => item.id));
+    links = links.filter(item => item.userId !== removed.id); saveLinks(links);
+    linkActivity = linkActivity.filter(item => item.userId !== removed.id); saveList(ACTIVITY_FILE, linkActivity);
+    notifications = notifications.filter(item => item.userId !== removed.id && !removedLinkIds.has(item.linkId)); saveList(NOTIFICATIONS_FILE, notifications);
+    payouts = payouts.filter(item => item.userId !== removed.id); saveList(PAYOUTS_FILE, payouts);
+    if (databasePool) await activeDatabaseClient.query('delete from equipe_digital_private.avatars where path like $1', [`/avatars/${removed.id}.%`]);
+    else for (const ext of ['png', 'jpg', 'webp']) { try { fs.unlinkSync(path.join(DATA_DIR, 'avatars', `${removed.id}.${ext}`)); } catch {} }
     for (const [sid, session] of sessions) if (session.userId === removed.id) sessions.delete(sid);
+    for (const [sid, session] of sessions) if (session.originalUserId === removed.id) sessions.delete(sid);
     return json(res, 200, { ok: true });
   }
   return json(res, 404, { error: 'Rota não encontrada.' });

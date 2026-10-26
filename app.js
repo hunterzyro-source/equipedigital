@@ -121,7 +121,7 @@ function metricCard(item) {
 }
 function memberRows(list) {
   if (!list.length) return '<div class="empty-state">Nenhuma conta encontrada.</div>';
-  return list.map(member => `<tr data-user-row="${escapeHtml(member.id)}"><td><div class="user-name">${avatarMarkup(member)}<span><strong>${escapeHtml(member.name)}</strong><small>@${escapeHtml(member.username)}${member.email ? ` · ${escapeHtml(member.email)}` : ''}</small></span></div></td><td><span class="role-pill ${member.role === 'admin' ? 'admin' : ''}">${member.role === 'admin' ? 'Administrador' : 'Equipe'}</span></td><td><span class="status-pill ${member.active ? '' : 'inactive'}"><i class="live-dot" style="${member.active ? '' : 'background:#ff8e96;box-shadow:none'}"></i>${member.active ? 'Ativa' : 'Inativa'}</span></td><td>${dateFmt(member.createdAt)}</td><td>${member.role === 'admin' ? '<span style="color:#687873;font-size:10px">Conta do ambiente</span>' : `<div class="table-actions"><button class="action-link" data-action="login-as" data-id="${escapeHtml(member.id)}">Entrar</button><button class="action-link" data-action="password" data-id="${escapeHtml(member.id)}">Redefinir senha</button><button class="action-link ${member.active ? 'danger' : ''}" data-action="toggle" data-id="${escapeHtml(member.id)}">${member.active ? 'Desativar' : 'Ativar'}</button></div>`}</td></tr>`).join('');
+  return list.map(member => `<tr data-user-row="${escapeHtml(member.id)}"><td><div class="user-name">${avatarMarkup(member)}<span><strong>${escapeHtml(member.name)}</strong><small>@${escapeHtml(member.username)}${member.email ? ` · ${escapeHtml(member.email)}` : ''}</small></span></div></td><td><span class="role-pill ${member.role === 'admin' ? 'admin' : ''}">${member.role === 'admin' ? 'Administrador' : 'Equipe'}</span></td><td><span class="status-pill ${member.active ? '' : 'inactive'}"><i class="live-dot" style="${member.active ? '' : 'background:#ff8e96;box-shadow:none'}"></i>${member.active ? 'Ativa' : 'Inativa'}</span></td><td>${dateFmt(member.createdAt)}</td><td>${member.role === 'admin' ? '<span style="color:#687873;font-size:10px">Conta do ambiente</span>' : `<div class="table-actions"><button class="action-link" data-action="login-as" data-id="${escapeHtml(member.id)}">Entrar</button><button class="action-link" data-action="password" data-id="${escapeHtml(member.id)}">Redefinir senha</button><button class="action-link ${member.active ? 'danger' : ''}" data-action="toggle" data-id="${escapeHtml(member.id)}">${member.active ? 'Desativar' : 'Ativar'}</button><button class="action-link danger" data-action="delete" data-id="${escapeHtml(member.id)}">Excluir conta</button></div>`}</td></tr>`).join('');
 }
 function avatarMarkup(profile, className = 'avatar') {
   const fallback = `<span class="avatar-fallback">${initials(profile?.name)}</span>`;
@@ -304,6 +304,15 @@ function bindUserActions() {
     if (button.dataset.action === 'toggle') {
       try { await api(`/api/users/${target.id}`, { method: 'PATCH', body: JSON.stringify({ active: !target.active }) }); notify(target.active ? 'Conta desativada.' : 'Conta ativada.'); await openDashboard(); }
       catch (error) { notify(error.message); }
+    }
+    if (button.dataset.action === 'delete') {
+      const accepted = confirm(`Excluir a conta de ${target.name} (@${target.username})? Os links, notificações e fotos dessa conta também serão removidos. Esta ação não pode ser desfeita.`);
+      if (!accepted) return;
+      try {
+        await api(`/api/users/${encodeURIComponent(target.id)}`, { method: 'DELETE' });
+        notify(`Conta de ${target.name} excluída.`);
+        await openDashboard();
+      } catch (error) { notify(error.message); }
     }
     if (button.dataset.action === 'password') showPasswordChange(target);
   }));
