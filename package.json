@@ -1,0 +1,18 @@
+{
+  "name": "equipe-digital",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Painel privado da Equipe Digital",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "db:migrate": "node scripts/migrate-supabase.js",
+    "db:verify": "node scripts/verify-supabase.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "pg": "8.23.1"
+  }
+}

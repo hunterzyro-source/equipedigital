@@ -1,0 +1,11 @@
+{
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "/api/index?__route=api/:path*" },
+    { "source": "/avatars/:path*", "destination": "/api/index?__route=avatars/:path*" }
+  ],
+  "functions": {
+    "api/index.js": {
+      "includeFiles": "index.html,styles.css,app.js,logo-digital.png,logo-mark.png"
+    }
+  }
+}
