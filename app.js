@@ -249,50 +249,6 @@ async function refreshDashboardPreservingScroll() {
   await openDashboard();
   window.scrollTo({ top: scrollTop, behavior: 'instant' });
 }
-function renderDashboard() {
-  const isAdmin = current?.role === 'admin' && !dashboardData?.impersonating;
-  const welcomeName = escapeHtml(current?.name?.split(' ')[0] || 'equipe');
-  const userList = isAdmin ? members : members.filter(user => user.role === 'admin' || user.id === current.id);
-  app.innerHTML = `<div class="dashboard">${dashboardData?.impersonating ? `<div class="impersonate-banner" style="grid-column:1/-1"><span>Você está visualizando o espaço de <strong>${escapeHtml(current.name)}</strong>.</span><button class="soft-btn" id="return-admin">${svg('arrow', 13)} Voltar à administração</button></div>` : ''}<aside class="sidebar"><div class="sidebar-brand">${brand()}</div><div class="side-label">Espaço de trabalho</div><nav class="nav">${navItem('overview', 'Visão geral', 'grid')}${isAdmin ? navItem('accounts', 'Contas da equipe', 'users', String(members.filter(m => m.role !== 'admin').length)) : navItem('my-space', 'Meu espaço', 'spark')}${navItem('links', isAdmin ? 'Links da equipe' : 'Meus links', 'link', dashboardData?.pendingCount ? String(dashboardData.pendingCount) : '')}</nav><div class="side-label">Acesso</div><nav class="nav">${navItem('security', 'Segurança', 'shield')}</nav><div class="sidebar-bottom"><div class="workspace-card"><div class="workspace-card-head"><span class="workspace-icon">${svg('wave', 15)}</span><strong>Equipe em sintonia</strong></div><p>Seu espaço de trabalho, organizado em um só lugar.</p></div><div class="side-profile"><span class="avatar">${initials(current?.name)}</span><span class="profile-copy"><strong>${escapeHtml(current?.name)}</strong><small>${isAdmin ? 'Administrador' : 'Membro da equipe'}</small></span><button class="icon-btn" title="Sair da conta" id="logout">${svg('logout', 15)}</button></div></div></aside><main class="main"><header class="topbar"><div class="breadcrumb">EQUIPE DIGITAL&nbsp; / &nbsp;<b>Visão geral</b></div><div class="top-actions"><span class="top-time">${new Intl.DateTimeFormat('pt-BR', { dateStyle: 'full' }).format(new Date())}</span><span class="icon-frame" title="Sessão protegida">${svg('bell', 15)}<i class="live-dot"></i></span></div></header><div class="page"><section class="welcome"><div><div class="eyebrow">${isAdmin ? 'PAINEL DA ADMINISTRAÇÃO' : 'SEU ESPAÇO DE TRABALHO'}</div><h1>Olá, ${welcomeName} <span style="color:var(--mint)">✦</span></h1><p>Um novo dia para fazer boas ideias acontecerem.</p></div><div class="welcome-actions">${isAdmin ? `<button class="soft-btn" id="manage-accounts">${svg('users', 14)} Gerenciar equipe</button><button class="primary-btn compact" id="add-user-top">${svg('plus', 14)} Nova conta</button>` : `<button class="soft-btn" id="copy-login">${svg('copy', 14)} Copiar meu login</button>`}</div></section><section class="metrics">${(dashboardData?.stats || []).map(metricCard).join('')}</section><section><div class="section-title"><div><h2>Panorama da equipe</h2><p>Um olhar rápido sobre o seu espaço de trabalho</p></div><a href="#" id="refresh-panel">Atualizado agora&nbsp; ↻</a></div><div class="content-grid"><article class="panel"><div class="panel-head"><h3>Ritmo da operação</h3><span>Atividade da semana</span></div>${chartMarkup()}</article><article class="panel"><div class="panel-head"><h3>Camada de inteligência</h3><span class="module-state"><i></i> Conectada</span></div><div class="module-list"><div class="module-row"><span class="module-icon">${svg('spark', 15)}</span><span class="module-copy"><strong>Equipe em movimento</strong><small>Seu espaço está pronto para colaborar</small></span><span class="module-state"><i></i> Ativo</span></div><div class="module-row"><span class="module-icon purple">${svg('shield', 15)}</span><span class="module-copy"><strong>Acesso protegido</strong><small>Contas geridas pela administração</small></span><span class="module-state"><i></i> Seguro</span></div><div class="module-row"><span class="module-icon blue">${svg('chart', 15)}</span><span class="module-copy"><strong>Visão compartilhada</strong><small>Informações reunidas em um só lugar</small></span><span class="module-state"><i></i> Pronto</span></div></div></article></div><div class="access-banner"><span class="access-icon">${svg('lock', 16)}</span><span class="access-copy"><strong>${isAdmin ? 'Acesso administrativo' : 'Acesso individual'}</strong><p>${isAdmin ? 'Você administra as contas e os acessos da equipe.' : 'Seu login é pessoal. A administração pode ajudar com alterações de acesso.'}</p></span>${isAdmin ? `<button class="soft-btn" id="manage-from-banner">Ver contas&nbsp; ${svg('arrow', 13)}</button>` : `<span class="role-pill">${escapeHtml(current?.username)}</span>`}</div></section>${isAdmin ? `<section class="admin-section" id="accounts-section"><div class="section-title"><div><h2>Contas da equipe</h2><p>Crie acessos, acompanhe o status ou entre em uma conta.</p></div><div class="admin-toolbar"><input class="search-input" id="user-search" type="search" placeholder="Buscar pessoas…" aria-label="Buscar contas"><button class="primary-btn compact" id="add-user-table">${svg('plus', 14)} Criar conta</button></div></div><article class="panel" style="padding:7px 17px"><div class="table-wrap"><table class="user-table"><thead><tr><th>Conta</th><th>Perfil</th><th>Status</th><th>Adicionada</th><th>Ações</th></tr></thead><tbody id="user-rows">${memberRows(userList)}</tbody></table></div></article></section>` : `<section class="admin-section"><div class="section-title"><div><h2>Seu acesso</h2><p>Esta conta faz parte da equipe Equipe Digital.</p></div></div><article class="panel"><div class="module-row"><span class="avatar">${initials(current?.name)}</span><span class="module-copy"><strong>${escapeHtml(current?.name)}</strong><small>Login: @${escapeHtml(current?.username)} · Conta ativa</small></span><span class="role-pill">Membro da equipe</span></div></article></section>`}${linkSection(isAdmin)}</div></main></div>`;
-  document.querySelector('#logout')?.addEventListener('click', logout);
-  document.querySelector('#return-admin')?.addEventListener('click', returnAdmin);
-  document.querySelector('#manage-accounts')?.addEventListener('click', scrollAccounts);
-  document.querySelector('#manage-from-banner')?.addEventListener('click', scrollAccounts);
-  document.querySelector('#export-links')?.addEventListener('click', () => {
-    const target = isAdmin && selectedLinkUser === 'all' ? { name: 'Toda a equipe', username: 'equipe' } : (isAdmin ? members.find(member => member.id === selectedLinkUser) : current);
-    downloadLinksText(linkItems, target || current);
-    notify('Arquivo TXT gerado.');
-  });
-  document.querySelector('#link-user-filter')?.addEventListener('change', async event => { selectedLinkUser = event.currentTarget.value; await loadLinks(); });
-  document.querySelector('#link-status-filter')?.addEventListener('change', event => { selectedLinkStatus = event.currentTarget.value; updateLinksUi(); });
-  document.querySelector('#submit-link-form')?.addEventListener('submit', submitLink);
-  document.querySelectorAll('[data-link-copy]').forEach(button => button.addEventListener('click', async () => {
-    const target = linkItems.find(link => link.id === button.dataset.linkCopy);
-    if (!target) return;
-    try { await navigator.clipboard.writeText(target.url); notify('Link copiado.'); }
-    catch { notify('Não foi possível copiar automaticamente.'); }
-  }));
-  document.querySelectorAll('[data-link-decision]').forEach(button => button.addEventListener('click', () => decideLink(button.dataset.id, button.dataset.linkDecision)));
-  document.querySelector('#add-user-top')?.addEventListener('click', showCreateUser);
-  document.querySelector('#add-user-table')?.addEventListener('click', showCreateUser);
-  document.querySelector('#copy-login')?.addEventListener('click', async () => { try { await navigator.clipboard.writeText(current.username); notify('Login copiado.'); } catch { notify(`Seu login é ${current.username}`); } });
-  document.querySelector('#refresh-panel')?.addEventListener('click', async event => { event.preventDefault(); await openDashboard(); notify('Painel atualizado.'); });
-  document.querySelector('#user-search')?.addEventListener('input', event => {
-    const query = event.currentTarget.value.toLowerCase().trim();
-    const filtered = userList.filter(member => `${member.name} ${member.username}`.toLowerCase().includes(query));
-    document.querySelector('#user-rows').innerHTML = memberRows(filtered);
-    bindUserActions();
-  });
-  bindUserActions();
-  document.querySelectorAll('[data-nav]').forEach(button => button.addEventListener('click', () => {
-    document.querySelectorAll('[data-nav]').forEach(item => item.classList.remove('active'));
-    button.classList.add('active');
-    if (button.dataset.nav === 'accounts') scrollAccounts();
-    else if (button.dataset.nav === 'links') document.querySelector('#links-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    else if (button.dataset.nav === 'security') notify('Sua sessão está protegida.');
-    else window.scrollTo({ top: 0, behavior: 'smooth' });
-  }));
-}
 function bindUserActions() {
   document.querySelectorAll('[data-action]').forEach(button => button.addEventListener('click', async () => {
     const target = members.find(item => item.id === button.dataset.id);
@@ -394,51 +350,6 @@ function profileSection() {
 }
 function adminAccountsSection() {
   return `<section class="admin-section" id="accounts-section"><div class="section-title"><div><h2>Contas da equipe</h2><p>Crie acessos e acompanhe as contas registradas.</p></div><div class="admin-toolbar"><input class="search-input" id="user-search" type="search" placeholder="Buscar pessoas…" aria-label="Buscar contas"></div></div><article class="panel create-account-panel"><div class="panel-head"><div><h3>Criar conta</h3><span>O acesso fica disponível assim que for criado.</span></div></div><form id="create-user-form" class="create-account-form"><label class="modal-field"><span>Nome completo</span><input id="new-name" name="name" placeholder="Ex.: Ana Oliveira" minlength="2" maxlength="80" required></label><label class="modal-field"><span>Nome de usuário</span><input id="new-username" name="username" placeholder="ex.: ana.oliveira" minlength="3" maxlength="32" pattern="[A-Za-z0-9._-]+" autocomplete="off" required></label><label class="modal-field"><span>E-mail</span><input id="new-email" name="email" type="email" placeholder="ana@empresa.com" maxlength="254" autocomplete="email" required></label><label class="modal-field"><span>Senha inicial</span><input id="new-password" name="password" type="password" placeholder="Pelo menos 8 caracteres" minlength="8" maxlength="128" autocomplete="new-password" required></label><div class="create-account-submit"><div class="login-error" id="account-form-error"></div><button class="primary-btn compact" id="create-user-submit" type="submit">${svg('plus', 14)} Criar conta</button></div></form></article><div class="section-title account-table-title"><div><h2>Contas registradas</h2><p>Entre no espaço de uma pessoa, redefina a senha ou altere o acesso.</p></div></div><article class="panel" style="padding:7px 17px"><div class="table-wrap"><table class="user-table"><thead><tr><th>Conta</th><th>Perfil</th><th>Status</th><th>Adicionada</th><th>Ações</th></tr></thead><tbody id="user-rows">${memberRows(members)}</tbody></table></div></article></section>`;
-}
-function renderDashboard() {
-  const isAdmin = current?.role === 'admin' && !dashboardData?.impersonating;
-  const welcomeName = escapeHtml(current?.name?.split(' ')[0] || 'equipe');
-  const userList = isAdmin ? members : members.filter(user => user.id === current.id);
-  app.innerHTML = `<div class="dashboard">${dashboardData?.impersonating ? `<div class="impersonate-banner" style="grid-column:1/-1"><span>Você está visualizando o espaço de <strong>${escapeHtml(current.name)}</strong>.</span><button class="soft-btn" id="return-admin">${svg('arrow', 13)} Voltar à administração</button></div>` : ''}<aside class="sidebar"><div class="sidebar-brand">${brand()}</div><div class="side-label">Espaço de trabalho</div><nav class="nav">${navItem('overview', 'Visão geral', 'grid')}${isAdmin ? navItem('accounts', 'Contas da equipe', 'users', String(members.filter(member => member.role !== 'admin').length)) : navItem('my-space', 'Meu espaço', 'spark')}${navItem('links', isAdmin ? 'Links da equipe' : 'Meus links', 'link', dashboardData?.pendingCount ? String(dashboardData.pendingCount) : '')}</nav><div class="side-label">Acesso</div><nav class="nav">${navItem('security', 'Segurança', 'shield')}</nav><div class="sidebar-bottom"><div class="workspace-card"><div class="workspace-card-head"><span class="workspace-icon">${svg('wave', 15)}</span><strong>Equipe em sintonia</strong></div><p>Seu espaço de trabalho, organizado em um só lugar.</p></div><div class="side-profile">${avatarMarkup(current)}<span class="profile-copy"><strong>${escapeHtml(current?.name)}</strong><small>${isAdmin ? 'Administrador' : 'Membro da equipe'}</small></span><button class="icon-btn" title="Sair da conta" id="logout">${svg('logout', 15)}</button></div></div></aside><main class="main"><header class="topbar"><div class="breadcrumb">EQUIPE DIGITAL&nbsp; / &nbsp;<b>Visão geral</b></div><div class="top-actions"><span class="top-time">${new Intl.DateTimeFormat('pt-BR', { dateStyle: 'full' }).format(new Date())}</span><span class="icon-frame" title="Sessão protegida">${svg('bell', 15)}<i class="live-dot"></i></span></div></header><div class="page"><section class="welcome"><div><div class="eyebrow">${isAdmin ? 'PAINEL DO ADMINISTRADOR' : 'SEU ESPAÇO DE TRABALHO'}</div><h1>Olá, ${welcomeName} <span style="color:var(--mint)">✦</span></h1><p>Um novo dia para fazer boas ideias acontecerem.</p></div><div class="welcome-actions">${isAdmin ? `<button class="soft-btn" id="manage-accounts">${svg('users', 14)} Gerenciar equipe</button><button class="primary-btn compact" id="add-user-top">${svg('plus', 14)} Nova conta</button>` : `<button class="soft-btn" id="copy-login">${svg('copy', 14)} Copiar meu login</button>`}</div></section><section class="metrics">${(dashboardData?.stats || []).map(metricCard).join('')}</section><section><div class="section-title"><div><h2>Panorama da equipe</h2><p>Um olhar rápido sobre o seu espaço de trabalho</p></div><a href="#" id="refresh-panel">Atualizado agora&nbsp; ↻</a></div><div class="content-grid"><article class="panel"><div class="panel-head"><h3>Ritmo da operação</h3><span>Atividade da semana</span></div>${chartMarkup()}</article><article class="panel"><div class="panel-head"><h3>Camada de inteligência</h3><span class="module-state"><i></i> Conectada</span></div><div class="module-list"><div class="module-row"><span class="module-icon">${svg('spark', 15)}</span><span class="module-copy"><strong>Equipe em movimento</strong><small>Seu espaço está pronto para colaborar</small></span><span class="module-state"><i></i> Ativo</span></div><div class="module-row"><span class="module-icon purple">${svg('shield', 15)}</span><span class="module-copy"><strong>Acesso protegido</strong><small>Contas geridas pelo administrador</small></span><span class="module-state"><i></i> Seguro</span></div><div class="module-row"><span class="module-icon blue">${svg('chart', 15)}</span><span class="module-copy"><strong>Visão compartilhada</strong><small>Informações reunidas em um só lugar</small></span><span class="module-state"><i></i> Pronto</span></div></div></article></div><div class="access-banner"><span class="access-icon">${svg('lock', 16)}</span><span class="access-copy"><strong>${isAdmin ? 'Acesso administrativo' : 'Acesso individual'}</strong><p>${isAdmin ? 'Você administra as contas e os acessos da equipe.' : 'Seu login é pessoal. O administrador pode ajudar com alterações de acesso.'}</p></span>${isAdmin ? `<button class="soft-btn" id="manage-from-banner">Ver contas&nbsp; ${svg('arrow', 13)}</button>` : `<span class="role-pill">${escapeHtml(current?.username)}</span>`}</div></section>${isAdmin ? adminAccountsSection() : ''}${profileSection()}${linkSection(isAdmin)}</div></main></div>`;
-  document.querySelector('#logout')?.addEventListener('click', logout);
-  document.querySelector('#return-admin')?.addEventListener('click', returnAdmin);
-  const goToAccounts = () => { document.querySelector('#accounts-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); setTimeout(() => document.querySelector('#new-name')?.focus({ preventScroll: true }), 350); };
-  document.querySelector('#manage-accounts')?.addEventListener('click', goToAccounts);
-  document.querySelector('#manage-from-banner')?.addEventListener('click', goToAccounts);
-  document.querySelector('#add-user-top')?.addEventListener('click', goToAccounts);
-  document.querySelector('#create-user-form')?.addEventListener('submit', createAccount);
-  document.querySelector('#user-search')?.addEventListener('input', event => {
-    const query = event.currentTarget.value.toLowerCase().trim();
-    document.querySelector('#user-rows').innerHTML = memberRows(members.filter(member => `${member.name} ${member.username} ${member.email || ''}`.toLowerCase().includes(query)));
-    bindUserActions();
-  });
-  document.querySelector('#choose-avatar')?.addEventListener('click', () => document.querySelector('#avatar-file').click());
-  document.querySelector('#avatar-file')?.addEventListener('change', uploadAvatar);
-  document.querySelector('#remove-avatar')?.addEventListener('click', removeAvatar);
-  document.querySelector('#export-links')?.addEventListener('click', () => {
-    const target = isAdmin && selectedLinkUser === 'all' ? { name: 'Toda a equipe', username: 'equipe' } : (isAdmin ? members.find(member => member.id === selectedLinkUser) : current);
-    downloadLinksText(linkItems, target || current); notify('Arquivo TXT gerado.');
-  });
-  document.querySelector('#link-user-filter')?.addEventListener('change', async event => { selectedLinkUser = event.currentTarget.value; await loadLinks(); });
-  document.querySelector('#link-status-filter')?.addEventListener('change', event => { selectedLinkStatus = event.currentTarget.value; updateLinksUi(); });
-  document.querySelector('#submit-link-form')?.addEventListener('submit', submitLink);
-  document.querySelectorAll('[data-link-copy]').forEach(button => button.addEventListener('click', async () => {
-    const target = linkItems.find(link => link.id === button.dataset.linkCopy);
-    if (!target) return;
-    try { await navigator.clipboard.writeText(target.url); notify('Link copiado.'); } catch { notify('Não foi possível copiar automaticamente.'); }
-  }));
-  document.querySelectorAll('[data-link-decision]').forEach(button => button.addEventListener('click', () => decideLink(button.dataset.id, button.dataset.linkDecision)));
-  document.querySelector('#copy-login')?.addEventListener('click', async () => { try { await navigator.clipboard.writeText(current.username); notify('Login copiado.'); } catch { notify(`Seu login é ${current.username}`); } });
-  document.querySelector('#refresh-panel')?.addEventListener('click', async event => { event.preventDefault(); await refreshDashboardPreservingScroll(); notify('Painel atualizado.'); });
-  bindUserActions();
-  document.querySelectorAll('[data-nav]').forEach(button => button.addEventListener('click', () => {
-    document.querySelectorAll('[data-nav]').forEach(item => item.classList.remove('active'));
-    button.classList.add('active');
-    if (button.dataset.nav === 'accounts') goToAccounts();
-    else if (button.dataset.nav === 'links') document.querySelector('#links-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    else if (button.dataset.nav === 'security') notify('Sua sessão está protegida.');
-    else window.scrollTo({ top: 0, behavior: 'smooth' });
-  }));
 }
 async function createAccount(event) {
   event.preventDefault();
