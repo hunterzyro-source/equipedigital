@@ -23,3 +23,16 @@ html[data-theme="light"] body,html[data-theme="light"] .app-shell{background:#f3
 .metrics-admin{grid-template-columns:repeat(4,minmax(0,1fr))}.admin-personal-explainer{margin:0 0 14px;color:var(--muted);font-size:11px;line-height:1.55}.admin-personal-settings .settings-form{align-items:end}.admin-personal-balance{display:grid;gap:6px;padding:11px 13px;border:1px solid var(--line);border-radius:10px;background:rgba(157,207,255,.045)}.admin-personal-balance small{color:var(--muted);font-size:10px}.admin-personal-balance strong{font:700 19px var(--display);color:var(--mint)}.sound-test-row{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-top:13px;padding-top:13px;border-top:1px solid var(--line)}.sound-test-row strong,.sound-test-row small{display:block}.sound-test-row strong{font-size:11px}.sound-test-row small{margin-top:4px;color:var(--muted);font-size:10px}.sound-test-row .soft-btn{flex:none}html[data-theme="light"] .admin-personal-balance{background:#f6faff;border-color:rgba(55,94,130,.16)}
 @media(max-width:1100px){.metrics-admin{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:760px){.metrics-admin{grid-template-columns:repeat(2,minmax(0,1fr))}.admin-personal-settings .settings-form{grid-template-columns:1fr}.admin-personal-balance,.admin-personal-settings .settings-form-actions{grid-column:1/-1}}
+
+/* Layout adaptável do modal de redefinição de senha */
+.password-modal-backdrop{overflow-y:auto;overscroll-behavior:contain;padding:clamp(12px,4vw,24px)}
+.password-modal{width:min(100%,420px);max-height:calc(100vh - 24px);max-height:calc(100dvh - 24px);overflow-y:auto;overscroll-behavior:contain;padding:clamp(18px,5vw,25px)}
+.password-modal .modal-head{gap:12px;min-width:0}
+.password-modal .modal-head>div{min-width:0;overflow-wrap:anywhere}
+.password-modal .modal-head p{line-height:1.55}
+.password-modal .modal-field input{min-width:0}
+.password-modal-help{color:#80908a;font-size:10px;line-height:1.5}
+.password-modal .modal-actions{flex-wrap:wrap}
+.password-modal .modal-actions button{min-height:42px}
+@media(max-width:480px){.password-modal-backdrop{padding:12px 12px max(12px,env(safe-area-inset-bottom))}.password-modal{width:100%;border-radius:14px;padding:18px}.password-modal .modal-head{margin-bottom:16px}.password-modal .modal-head h2{font-size:19px}.password-modal .modal-actions{flex-direction:column-reverse;align-items:stretch;gap:9px;margin-top:16px}.password-modal .modal-actions button{width:100%;min-height:44px}}
+@media(max-height:560px){.password-modal-backdrop{align-items:start}.password-modal{margin-block:auto}}
