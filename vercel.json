@@ -1,6 +1,6 @@
 {
   "builds": [
-    { "src": "api/index.js", "use": "@vercel/node" },
+    { "src": "api/dispatch.js", "use": "@vercel/node" },
     { "src": "index.html", "use": "@vercel/static" },
     { "src": "styles.css", "use": "@vercel/static" },
     { "src": "app.js", "use": "@vercel/static" },
@@ -8,7 +8,7 @@
     { "src": "logo-mark.png", "use": "@vercel/static" }
   ],
   "rewrites": [
-    { "source": "/api/:path*", "destination": "/api/index?__route=api/:path*" },
-    { "source": "/avatars/:path*", "destination": "/api/index?__route=avatars/:path*" }
+    { "source": "/api/:path*", "destination": "/api/dispatch?__route=api/:path*" },
+    { "source": "/avatars/:path*", "destination": "/api/dispatch?__route=avatars/:path*" }
   ]
 }
