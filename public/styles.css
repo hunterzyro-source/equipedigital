@@ -38,3 +38,4 @@ dialog.password-reset-dialog .modal-actions{display:flex;flex-wrap:nowrap;justif
 dialog.password-reset-dialog .modal-actions button{min-height:42px}
 @media(max-width:480px){dialog.password-reset-dialog[open]{width:calc(100vw - 24px)!important;padding:18px}dialog.password-reset-dialog .modal-head h2{font-size:19px}dialog.password-reset-dialog .modal-actions{display:grid;grid-template-columns:1fr 1fr;gap:9px}dialog.password-reset-dialog .modal-actions button{width:100%;min-width:0;min-height:44px;padding-inline:10px}}
 @media(max-height:420px){dialog.password-reset-dialog[open]{padding:14px}dialog.password-reset-dialog>.modal-head{margin-bottom:10px}dialog.password-reset-dialog .modal-field{margin:8px 0}dialog.password-reset-dialog .modal-actions{margin-top:10px}}
+.small-soft.copied{color:#b9dcff;border-color:rgba(176,216,255,.25);background:rgba(176,216,255,.1)}
