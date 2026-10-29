@@ -259,7 +259,6 @@ function updateLinksUi() {
   const valueLabel = document.querySelector('#link-value-label');
   if (valueLabel) valueLabel.textContent = `${valuePerLinkCents === null ? 'Valor definido individualmente por perfil' : `${money(valuePerLinkCents)} por link aprovado`} · saldo ilustrativo`;
   document.querySelector('#links-total').textContent = `${shown.length} ${shown.length === 1 ? 'link' : 'links'}${isAdmin && selectedLinkStatus !== 'all' ? ` de ${linkItems.length}` : ''}`;
-  list.querySelectorAll('[data-link-copy]').forEach(button => button.addEventListener('click', () => copyLinkForAdmin(button)));
   list.querySelectorAll('[data-link-decision]').forEach(button => button.addEventListener('click', () => decideLink(button.dataset.id, button.dataset.linkDecision)));
   list.querySelectorAll('[data-link-reanalysis]').forEach(button => button.addEventListener('click', () => requestLinkReanalysis(button.dataset.linkReanalysis)));
 }
@@ -604,7 +603,6 @@ function renderDashboard() {
   document.querySelector('#create-user-form')?.addEventListener('submit', createAccount);
   document.querySelector('#admin-personal-rate-form')?.addEventListener('submit', saveAdminPersonalRate);
   document.querySelectorAll('[data-save-link-value]').forEach(button => button.addEventListener('click', () => saveLinkValue(button.dataset.saveLinkValue)));
-  document.querySelectorAll('[data-link-copy]').forEach(button => button.addEventListener('click', () => copyLinkForAdmin(button)));
   document.querySelector('#profile-settings-form')?.addEventListener('submit', saveProfileSettings);
   document.querySelector('#password-settings-form')?.addEventListener('submit', savePasswordSettings);
   document.querySelectorAll('input[name="site-theme"]').forEach(input => input.addEventListener('change', event => {
@@ -642,5 +640,9 @@ function renderDashboard() {
   document.querySelector('#refresh-panel')?.addEventListener('click', async event => { event.preventDefault(); await refreshDashboardPreservingScroll(); notify('Painel atualizado.'); });
   if (activeView === 'accounts') bindUserActions();
 }
+document.addEventListener('click', event => {
+  const button = event.target.closest?.('[data-link-copy]');
+  if (button) copyLinkForAdmin(button);
+});
 applyUiPreferences();
 start();
