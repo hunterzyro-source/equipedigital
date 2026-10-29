@@ -265,8 +265,8 @@ function adminPersonalBalance(admin) {
   }
   return admin.personalBalanceCents;
 }
-function cleanLink(link) {
-  return { id: link.id, publicId: link.publicId, userId: link.userId, userName: link.userName, username: link.username, label: link.label, url: link.url, status: link.status, valueCents: link.status === 'approved' ? linkValueFor(link) : 0, createdAt: link.createdAt, decidedAt: link.decidedAt || null, decidedBy: link.decidedBy || null, reason: link.reason || '', reanalysisRequestedAt: link.reanalysisRequestedAt || null };
+function cleanLink(link, includeAdminMeta = false) {
+  return { id: link.id, publicId: link.publicId, userId: link.userId, userName: link.userName, username: link.username, label: link.label, url: link.url, status: link.status, valueCents: link.status === 'approved' ? linkValueFor(link) : 0, createdAt: link.createdAt, decidedAt: link.decidedAt || null, decidedBy: link.decidedBy || null, reason: link.reason || '', reanalysisRequestedAt: link.reanalysisRequestedAt || null, ...(includeAdminMeta ? { copiedAt: link.copiedAt || null, copiedBy: link.copiedBy || null } : {}) };
 }
 function createSession(user, remember, previous = null) {
   const sid = crypto.randomBytes(32).toString('hex');
@@ -342,7 +342,7 @@ async function handleApi(req, res, url) {
     const visible = links.filter(link => user.role === 'admin' ? (!requestedUserId || requestedUserId === 'all' || link.userId === requestedUserId) : link.userId === user.id)
       .sort((a, b) => Number(a.status !== 'pending') - Number(b.status !== 'pending') || Number(!a.reanalysisRequestedAt) - Number(!b.reanalysisRequestedAt) || b.createdAt.localeCompare(a.createdAt));
     const rateUser = user.role === 'admin' ? users.find(member => member.id === requestedUserId) : user;
-    return json(res, 200, { links: visible.map(cleanLink), balanceCents: user.role === 'admin' ? (requestedUserId && requestedUserId !== 'all' ? balanceFor(requestedUserId) : teamBalance()) : balanceFor(user.id), valuePerLinkCents: rateUser ? linkRateFor(rateUser) : null, pendingCount: visible.filter(link => link.status === 'pending' || (user.role === 'admin' && link.status === 'rejected' && link.reanalysisRequestedAt)).length });
+    return json(res, 200, { links: visible.map(link => cleanLink(link, user.role === 'admin')), balanceCents: user.role === 'admin' ? (requestedUserId && requestedUserId !== 'all' ? balanceFor(requestedUserId) : teamBalance()) : balanceFor(user.id), valuePerLinkCents: rateUser ? linkRateFor(rateUser) : null, pendingCount: visible.filter(link => link.status === 'pending' || (user.role === 'admin' && link.status === 'rejected' && link.reanalysisRequestedAt)).length });
   }
   if (url.pathname === '/api/links' && req.method === 'POST') {
     expireOldRejections();
@@ -363,6 +363,16 @@ async function handleApi(req, res, url) {
     linkFingerprints.add(fingerprint); saveList(LINK_FINGERPRINTS_FILE, [...linkFingerprints]);
     addNotification(users.find(item => item.role === 'admin')?.id, 'new-link', 'Novo link enviado', `${user.name} enviou ${created.publicId}.`, { linkId: created.id });
     return json(res, 201, { link: cleanLink(created) });
+  }
+  const copiedLinkId = url.pathname.match(/^\/api\/links\/([^/]+)\/copied$/)?.[1];
+  if (copiedLinkId && req.method === 'POST') {
+    if (user.role !== 'admin' || found.session.adminMode) return json(res, 403, { error: 'Somente administradores podem registrar a cópia.' });
+    const target = links.find(link => link.id === copiedLinkId);
+    if (!target) return json(res, 404, { error: 'Link não encontrado.' });
+    target.copiedAt ||= new Date().toISOString();
+    target.copiedBy ||= user.id;
+    saveLinks(links);
+    return json(res, 200, { copiedAt: target.copiedAt, copiedBy: target.copiedBy });
   }
   if (url.pathname === '/api/notifications' && req.method === 'GET') {
     const own = notifications.filter(item => item.userId === user.id).slice(0, 100);
