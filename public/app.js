@@ -105,6 +105,25 @@ async function api(url, options = {}) {
   }
   return data;
 }
+async function copyTextToClipboard(value) {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(value);
+      return;
+    }
+  } catch {}
+  const field = document.createElement('textarea');
+  field.value = value;
+  field.setAttribute('readonly', '');
+  field.style.position = 'fixed';
+  field.style.opacity = '0';
+  document.body.appendChild(field);
+  field.select();
+  field.setSelectionRange(0, field.value.length);
+  const copied = document.execCommand('copy');
+  field.remove();
+  if (!copied) throw new Error('Não foi possível copiar automaticamente. Selecione e copie o link manualmente.');
+}
 
 function brand(mobile = false) {
   return `<div class="brand ${mobile ? 'login-brand-mobile' : ''}"><div class="brand-mark"><img src="/logo-mark.png?v=3" alt="" aria-hidden="true"></div><div><div class="brand-title">Equipe Digital</div><span class="brand-sub">workspace privado</span></div></div>`;
@@ -166,7 +185,7 @@ function linkStatus(link) {
 }
 function renderLinkCards(list, isAdmin) {
   if (!list.length) return `<div class="links-empty"><span class="empty-link-icon">${svg('link', 21)}</span><strong>${isAdmin ? 'Nenhum link neste filtro' : 'Seu fluxo começa com um link'}</strong><p>${isAdmin ? 'Escolha outra pessoa ou aguarde novos envios da equipe.' : 'Envie quantos links precisar. Cada um será analisado pela administração.'}</p></div>`;
-  return list.map(link => `<article class="submitted-link" data-link-card="${escapeHtml(link.id)}"><div class="link-card-top"><div class="link-id-wrap"><span class="link-icon">${svg('link', 15)}</span><span><strong>${escapeHtml(link.publicId)}</strong><small>${escapeHtml(link.userName)} · @${escapeHtml(link.username)}</small></span></div>${linkStatus(link)}</div>${link.label ? `<div class="link-label">${escapeHtml(link.label)}</div>` : ''}<a class="link-url" href="${escapeHtml(link.url)}" target="_blank" rel="noopener noreferrer" title="Abrir link">${escapeHtml(link.url)}</a><div class="link-card-bottom"><span class="link-meta">Enviado em ${dateFmt(link.createdAt)}${link.status === 'approved' ? ` · <b class="approved-credit">+ ${money(link.valueCents)}</b>` : ''}${link.status === 'rejected' && link.reason ? ` · <span class="reject-reason">${escapeHtml(link.reason)}</span>` : ''}</span><div class="link-actions"><button class="soft-btn small-soft${link.copiedAt ? ' copied' : ''}" data-link-copy="${escapeHtml(link.id)}">${svg(link.copiedAt ? 'check' : 'copy', 13)} ${link.copiedAt ? 'Copiado' : 'Copiar link'}</button>${isAdmin && link.status === 'pending' ? `<button class="approve-btn" data-link-decision="approved" data-id="${escapeHtml(link.id)}">${svg('check', 13)} Aprovar</button><button class="reject-btn" data-link-decision="rejected" data-id="${escapeHtml(link.id)}">${svg('x', 13)} Desaprovar</button>` : ''}${isAdmin && link.status === 'rejected' && link.reanalysisRequestedAt ? `<button class="approve-btn" data-link-decision="approved" data-id="${escapeHtml(link.id)}">${svg('check', 13)} Aprovar reanálise</button><button class="reject-btn" data-link-decision="rejected" data-id="${escapeHtml(link.id)}">${svg('x', 13)} Manter desaprovado</button>` : ''}${!isAdmin && link.status === 'rejected' ? (link.reanalysisRequestedAt ? '<span class="link-meta">Pedido enviado · aguardando administrador</span>' : `<button class="soft-btn small-soft" data-link-reanalysis="${escapeHtml(link.id)}">Pedir reanálise</button>`) : ''}</div></div></article>`).join('');
+  return list.map(link => `<article class="submitted-link" data-link-card="${escapeHtml(link.id)}"><div class="link-card-top"><div class="link-id-wrap"><span class="link-icon">${svg('link', 15)}</span><span><strong>${escapeHtml(link.publicId)}</strong><small>${escapeHtml(link.userName)} · @${escapeHtml(link.username)}</small></span></div>${linkStatus(link)}</div>${link.label ? `<div class="link-label">${escapeHtml(link.label)}</div>` : ''}<a class="link-url" href="${escapeHtml(link.url)}" target="_blank" rel="noopener noreferrer" title="Abrir link">${escapeHtml(link.url)}</a><div class="link-card-bottom"><span class="link-meta">Enviado em ${dateFmt(link.createdAt)}${link.status === 'approved' ? ` · <b class="approved-credit">+ ${money(link.valueCents)}</b>` : ''}${link.status === 'rejected' && link.reason ? ` · <span class="reject-reason">${escapeHtml(link.reason)}</span>` : ''}</span><div class="link-actions"><button type="button" class="soft-btn small-soft${link.copiedAt ? ' copied' : ''}" data-link-copy="${escapeHtml(link.id)}">${svg(link.copiedAt ? 'check' : 'copy', 13)} ${link.copiedAt ? 'Copiado' : 'Copiar link'}</button>${isAdmin && link.status === 'pending' ? `<button class="approve-btn" data-link-decision="approved" data-id="${escapeHtml(link.id)}">${svg('check', 13)} Aprovar</button><button class="reject-btn" data-link-decision="rejected" data-id="${escapeHtml(link.id)}">${svg('x', 13)} Desaprovar</button>` : ''}${isAdmin && link.status === 'rejected' && link.reanalysisRequestedAt ? `<button class="approve-btn" data-link-decision="approved" data-id="${escapeHtml(link.id)}">${svg('check', 13)} Aprovar reanálise</button><button class="reject-btn" data-link-decision="rejected" data-id="${escapeHtml(link.id)}">${svg('x', 13)} Manter desaprovado</button>` : ''}${!isAdmin && link.status === 'rejected' ? (link.reanalysisRequestedAt ? '<span class="link-meta">Pedido enviado · aguardando administrador</span>' : `<button class="soft-btn small-soft" data-link-reanalysis="${escapeHtml(link.id)}">Pedir reanálise</button>`) : ''}</div></div></article>`).join('');
 }
 function downloadLinksText(list, target) {
   const safeName = (target?.username || target?.name || 'equipe').normalize('NFKD').replace(/[^a-zA-Z0-9._-]+/g, '_').replace(/^_+|_+$/g, '') || 'equipe';
@@ -240,21 +259,23 @@ function updateLinksUi() {
   const valueLabel = document.querySelector('#link-value-label');
   if (valueLabel) valueLabel.textContent = `${valuePerLinkCents === null ? 'Valor definido individualmente por perfil' : `${money(valuePerLinkCents)} por link aprovado`} · saldo ilustrativo`;
   document.querySelector('#links-total').textContent = `${shown.length} ${shown.length === 1 ? 'link' : 'links'}${isAdmin && selectedLinkStatus !== 'all' ? ` de ${linkItems.length}` : ''}`;
-  list.querySelectorAll('[data-link-copy]').forEach(button => button.addEventListener('click', async () => {
-    const target = linkItems.find(link => link.id === button.dataset.linkCopy);
-    if (!target) return;
-    try {
-      await navigator.clipboard.writeText(target.url);
-      const result = await api(`/api/links/${encodeURIComponent(target.id)}/copied`, { method: 'POST' });
-      target.copiedAt = result.copiedAt;
-      target.copiedBy = result.copiedBy;
-      button.classList.add('copied');
-      button.innerHTML = `${svg('check', 13)} Copiado`;
-      notify('Link copiado e registrado para a equipe administrativa.');
-    } catch (error) { notify(error.message || 'Link copiado, mas não foi possível salvar o registro.'); }
-  }));
+  list.querySelectorAll('[data-link-copy]').forEach(button => button.addEventListener('click', () => copyLinkForAdmin(button)));
   list.querySelectorAll('[data-link-decision]').forEach(button => button.addEventListener('click', () => decideLink(button.dataset.id, button.dataset.linkDecision)));
   list.querySelectorAll('[data-link-reanalysis]').forEach(button => button.addEventListener('click', () => requestLinkReanalysis(button.dataset.linkReanalysis)));
+}
+async function copyLinkForAdmin(button) {
+  const target = linkItems.find(link => link.id === button.dataset.linkCopy);
+  if (!target) return;
+  try { await copyTextToClipboard(target.url); }
+  catch (error) { notify(error.message || 'Não foi possível copiar automaticamente.'); return; }
+  button.classList.add('copied');
+  button.innerHTML = `${svg('check', 13)} Copiado`;
+  try {
+    const result = await api(`/api/links/${encodeURIComponent(target.id)}/copied`, { method: 'POST' });
+    target.copiedAt = result.copiedAt;
+    target.copiedBy = result.copiedBy;
+    notify('Link copiado e registrado para a equipe administrativa.');
+  } catch (error) { notify(`Link copiado. ${error.message || 'Não foi possível salvar o registro para os outros administradores.'}`); }
 }
 async function loadLinks() {
   try { await fetchLinks(); updateLinksUi(); }
@@ -583,6 +604,7 @@ function renderDashboard() {
   document.querySelector('#create-user-form')?.addEventListener('submit', createAccount);
   document.querySelector('#admin-personal-rate-form')?.addEventListener('submit', saveAdminPersonalRate);
   document.querySelectorAll('[data-save-link-value]').forEach(button => button.addEventListener('click', () => saveLinkValue(button.dataset.saveLinkValue)));
+  document.querySelectorAll('[data-link-copy]').forEach(button => button.addEventListener('click', () => copyLinkForAdmin(button)));
   document.querySelector('#profile-settings-form')?.addEventListener('submit', saveProfileSettings);
   document.querySelector('#password-settings-form')?.addEventListener('submit', savePasswordSettings);
   document.querySelectorAll('input[name="site-theme"]').forEach(input => input.addEventListener('change', event => {
